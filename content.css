@@ -1,0 +1,23 @@
+/* Manifest-declared: Chrome injects this before any HTML is parsed,
+   bypassing the page's Content Security Policy. No JS or DOM mutation
+   required — safe during React/SSR hydration. */
+
+/* Blur all images/videos unless extension is disabled.
+   Using html:not([data-cf-off]) gives higher specificity than a plain
+   "img" rule, so we beat site !important rules on img elements. */
+html:not([data-cf-off]) img,
+html:not([data-cf-off]) video,
+html:not([data-cf-off]) [style*="background-image"] {
+  filter: blur(20px) brightness(0.6) !important;
+  cursor: pointer !important;
+  transition: filter 0.2s !important;
+}
+
+/* Extension disabled */
+html[data-cf-off] img,
+html[data-cf-off] video,
+html[data-cf-off] [style*="background-image"] {
+  filter: none !important;
+  cursor: auto !important;
+  transition: none !important;
+}

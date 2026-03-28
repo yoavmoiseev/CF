@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Content Filter",
+  "version": "1.0",
+  "description": "Blur all images by default. Double-click to reveal.",
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "css": ["content.css"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "permissions": ["storage", "tabs"]
+}
