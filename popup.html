@@ -4,35 +4,306 @@
   <meta charset="UTF-8" />
   <title>Content Filter</title>
   <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
     body {
-      font-family: sans-serif;
-      width: 200px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      width: 380px;
       padding: 16px;
-      text-align: center;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #333;
+    }
+    .container {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    }
+    h2 {
+      font-size: 18px;
+      margin-bottom: 12px;
+      color: #333;
+    }
+    
+    /* Status Section */
+    .status-box {
+      background: #f8f9fa;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 14px;
+      border-left: 4px solid #667eea;
     }
     #status {
       font-size: 16px;
-      margin-bottom: 12px;
       font-weight: bold;
+      margin-bottom: 4px;
+      color: #333;
+    }
+    #grade {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 2px;
+    }
+    #gradeDescription {
+      font-size: 13px;
+      color: #999;
+    }
+    
+    /* Findings Section */
+    .findings {
+      font-size: 12px;
+      background: #f3f4f6;
+      padding: 10px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+    .findings div {
+      margin: 4px 0;
+      color: #555;
+    }
+    .findings strong {
+      color: #333;
+    }
+    
+    /* Controls */
+    .controls {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    button {
+      flex: 1;
+      min-width: 90px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 500;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
     }
     #toggle {
-      padding: 8px 16px;
-      font-size: 14px;
-      cursor: pointer;
-      border: none;
-      border-radius: 4px;
-      background-color: #333;
-      color: #fff;
-      width: 100%;
+      background-color: #667eea;
+      color: white;
+      flex: 0 1 100%;
     }
     #toggle:hover {
-      background-color: #555;
+      background-color: #5568d3;
+      transform: translateY(-1px);
+    }
+    #analyze {
+      background-color: #10b981;
+      color: white;
+    }
+    #analyze:hover {
+      background-color: #059669;
+    }
+    #feedback {
+      background-color: #f59e0b;
+      color: white;
+    }
+    #feedback:hover {
+      background-color: #d97706;
+    }
+    
+    /* Grade Override */
+    .grade-override {
+      background: #fef3c7;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      border: 1px solid #fbbf24;
+    }
+    .grade-override label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #333;
+    }
+    .grade-slides {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    #gradeSlider {
+      flex: 1;
+      height: 6px;
+      border-radius: 3px;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      background: linear-gradient(to right, #ef4444, #f97316, #eab308, #84cc16, #22c55e);
+    }
+    #gradeSlider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: white;
+      border: 3px solid #667eea;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+    #gradeSlider::-moz-range-thumb {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: white;
+      border: 3px solid #667eea;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+    #gradeValue {
+      font-weight: bold;
+      color: #667eea;
+      min-width: 30px;
+      text-align: center;
+    }
+    
+    /* Whitelist/Blacklist */
+    .list-controls {
+      display: flex;
+      gap: 8px;
+    }
+    #whitelist, #blacklist {
+      flex: 1;
+      padding: 6px 10px;
+      font-size: 12px;
+      background-color: #dcfce7;
+      color: #15803d;
+      border: 1px solid #86efac;
+    }
+    #whitelist:hover, #blacklist:hover {
+      background-color: #bbf7d0;
+    }
+    #blacklist {
+      background-color: #fee2e2;
+      color: #991b1b;
+      border-color: #fca5a5;
+    }
+    #blacklist:hover {
+      background-color: #fecaca;
+    }
+    
+    /* Modal */
+    #feedbackModal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+    #feedbackModal.show {
+      display: flex;
+    }
+    .modal-content {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      max-width: 340px;
+      width: 90%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+    .modal-content h3 {
+      margin-bottom: 12px;
+      color: #333;
+    }
+    .modal-content textarea {
+      width: 100%;
+      height: 100px;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-family: sans-serif;
+      font-size: 12px;
+      resize: none;
+      margin-bottom: 12px;
+    }
+    .modal-controls {
+      display: flex;
+      gap: 8px;
+    }
+    .modal-controls button {
+      flex: 1;
+    }
+    #submitFeedback {
+      background-color: #10b981;
+      color: white;
+    }
+    #submitFeedback:hover {
+      background-color: #059669;
+    }
+    #cancelFeedback {
+      background-color: #e5e7eb;
+      color: #333;
+    }
+    #cancelFeedback:hover {
+      background-color: #d1d5db;
     }
   </style>
 </head>
 <body>
-  <div id="status">Status: ...</div>
-  <button id="toggle">Toggle Filter</button>
+  <div class="container">
+    <h2>Content Filter</h2>
+    
+    <div class="status-box">
+      <div id="status">Status: ...</div>
+      <div id="grade">Grade: --</div>
+      <div id="gradeDescription">--</div>
+    </div>
+
+    <div class="findings" id="findings"></div>
+
+    <div class="controls">
+      <button id="toggle">Toggle Filter</button>
+      <button id="analyze">Analyze Page</button>
+      <button id="feedback">Give Feedback</button>
+    </div>
+
+    <div class="grade-override">
+      <label>Override Grade (1-10):</label>
+      <div class="grade-slides">
+        <input type="range" id="gradeSlider" min="1" max="10" value="6" />
+        <span id="gradeValue">6</span>
+      </div>
+    </div>
+
+    <div class="list-controls">
+      <button id="whitelist">✓ Whitelist</button>
+      <button id="blacklist">✗ Blacklist</button>
+    </div>
+  </div>
+
+  <!-- Feedback Modal -->
+  <div id="feedbackModal">
+    <div class="modal-content">
+      <h3>Send Feedback</h3>
+      <p style="font-size: 12px; color: #666; margin-bottom: 12px;">
+        Help improve the grading system. What's wrong with the current grade?
+      </p>
+      <textarea id="feedbackText" placeholder="This site is actually... "></textarea>
+      <div class="modal-controls">
+        <button id="submitFeedback">Submit</button>
+        <button id="cancelFeedback">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="storage.js"></script>
+  <script src="analyzer.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

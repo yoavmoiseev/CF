@@ -1,23 +1,215 @@
-/* Manifest-declared: Chrome injects this before any HTML is parsed,
-   bypassing the page's Content Security Policy. No JS or DOM mutation
-   required — safe during React/SSR hydration. */
+/* Content Filter CSS - Applied at document_start before page JS runs */
 
-/* Blur all images/videos unless extension is disabled.
-   Using html:not([data-cf-off]) gives higher specificity than a plain
-   "img" rule, so we beat site !important rules on img elements. */
-html:not([data-cf-off]) img,
-html:not([data-cf-off]) video,
-html:not([data-cf-off]) [style*="background-image"] {
-  filter: blur(20px) brightness(0.6) !important;
-  cursor: pointer !important;
-  transition: filter 0.2s !important;
+/* ============================================================================
+   FULL-SITE BLOCKING FOR GRADE 1-3 (ADULT/DANGEROUS)
+   ============================================================================ */
+
+/* Block ENTIRE page for grade 1-3 */
+html[data-cf-grade="1"],
+html[data-cf-grade="2"],
+html[data-cf-grade="3"] {
+  all: revert !important;
 }
 
-/* Extension disabled */
-html[data-cf-off] img,
-html[data-cf-off] video,
-html[data-cf-off] [style*="background-image"] {
+html[data-cf-grade="1"] body,
+html[data-cf-grade="2"] body,
+html[data-cf-grade="3"] body {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+html[data-cf-grade="1"] * [hidden],
+html[data-cf-grade="2"] * [hidden],
+html[data-cf-grade="3"] * [hidden] {
+  display: none !important;
+}
+
+/* Show warning for grade 1-3 block */
+html[data-cf-grade="1"]::after,
+html[data-cf-grade="2"]::after,
+html[data-cf-grade="3"]::after {
+  content: "⚠️ CONTENT BLOCKED (Grade 1-3: Adult/Dangerous). Click extension to override." !important;
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  background: #ff4444 !important;
+  color: white !important;
+  padding: 40px !important;
+  border-radius: 10px !important;
+  font-size: 18px !important;
+  z-index: 2147483647 !important;
+  text-align: center !important;
+  font-weight: bold !important;
+  font-family: Arial, sans-serif !important;
+  width: 80% !important;
+  display: block !important;
+}
+
+/* ============================================================================
+   BLACKLIST: Site blacklisted (treat as grade 1-3)
+   ============================================================================ */
+
+html[data-cf-blacklisted] body {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+html[data-cf-blacklisted]::after {
+  content: "🚫 SITE BLACKLISTED - Blocked by Content Filter" !important;
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  background: #ff0000 !important;
+  color: white !important;
+  padding: 40px !important;
+  border-radius: 10px !important;
+  font-size: 18px !important;
+  z-index: 2147483647 !important;
+  text-align: center !important;
+  font-weight: bold !important;
+  font-family: Arial, sans-serif !important;
+  width: 80% !important;
+  display: block !important;
+}
+
+/* ============================================================================
+   DEFAULT MEDIA BLUR (before grade logic is applied)
+   ============================================================================ */
+
+/* All media elements default to blur+hidden */
+img, video, picture, g-img, g-img img, svg image,
+iframe,
+[style*="background-image"], [style*="background-url"],
+[aria-label*="image"], [aria-label*="photo"],
+[role="img"], [role="image"],
+.image, .picture, .photo, .img,
+[data-image], [data-img], [data-photo],
+[data-video], [data-media], [data-src], [data-lazy],
+[class*="image"], [class*="photo"],
+[class*="video"], [class*="player"], [class*="media"],
+[class*="container"],
+[id*="image"], [id*="img"], [id*="video"],
+cr-searchbox-icon img,
+cr-searchbox-match img,
+cr-searchbox-dropdown img {
+  filter: blur(20px) brightness(0.6) !important;
+  visibility: hidden !important;
+  cursor: pointer !important;
+}
+
+img[loading="lazy"], img[data-src], img[data-lazy] {
+  visibility: hidden !important;
+}
+
+/* ============================================================================
+   GRADE 4-5: HEAVY BLUR (Finance, Medical, Adult-light)
+   ============================================================================ */
+
+html[data-cf-grade="4"] img,
+html[data-cf-grade="4"] video,
+html[data-cf-grade="4"] iframe,
+html[data-cf-grade="4"] g-img,
+html[data-cf-grade="4"] g-img img,
+html[data-cf-grade="4"] [style*="background-image"],
+html[data-cf-grade="5"] img,
+html[data-cf-grade="5"] video,
+html[data-cf-grade="5"] iframe,
+html[data-cf-grade="5"] g-img,
+html[data-cf-grade="5"] g-img img,
+html[data-cf-grade="5"] [style*="background-image"] {
+  visibility: visible !important;
+  filter: blur(35px) brightness(0.3) !important;
+  cursor: pointer !important;
+}
+
+/* ============================================================================
+   GRADE 6-7: MEDIUM BLUR (Education, Tech, News-light)
+   ============================================================================ */
+
+html[data-cf-grade="6"] img,
+html[data-cf-grade="6"] video,
+html[data-cf-grade="6"] iframe,
+html[data-cf-grade="6"] g-img,
+html[data-cf-grade="6"] g-img img,
+html[data-cf-grade="6"] [style*="background-image"],
+html[data-cf-grade="7"] img,
+html[data-cf-grade="7"] video,
+html[data-cf-grade="7"] iframe,
+html[data-cf-grade="7"] g-img,
+html[data-cf-grade="7"] g-img img,
+html[data-cf-grade="7"] [style*="background-image"] {
+  visibility: visible !important;
+  filter: blur(15px) brightness(0.5) !important;
+  cursor: pointer !important;
+}
+
+/* ============================================================================
+   GRADE 8-9: MINIMAL BLUR (Tech, News, Quality content)
+   ============================================================================ */
+
+html[data-cf-grade="8"] img,
+html[data-cf-grade="8"] video,
+html[data-cf-grade="8"] iframe,
+html[data-cf-grade="8"] g-img,
+html[data-cf-grade="8"] g-img img,
+html[data-cf-grade="8"] [style*="background-image"],
+html[data-cf-grade="9"] img,
+html[data-cf-grade="9"] video,
+html[data-cf-grade="9"] iframe,
+html[data-cf-grade="9"] g-img,
+html[data-cf-grade="9"] g-img img,
+html[data-cf-grade="9"] [style*="background-image"] {
+  visibility: visible !important;
+  filter: blur(8px) brightness(0.7) !important;
+  cursor: pointer !important;
+}
+
+/* ============================================================================
+   GRADE 10: NO FILTER (Text-only, Safe content)
+   ============================================================================ */
+
+html[data-cf-grade="10"] img,
+html[data-cf-grade="10"] video,
+html[data-cf-grade="10"] iframe,
+html[data-cf-grade="10"] g-img,
+html[data-cf-grade="10"] g-img img,
+html[data-cf-grade="10"] [style*="background-image"] {
+  visibility: visible !important;
   filter: none !important;
   cursor: auto !important;
-  transition: none !important;
 }
+
+/* ============================================================================
+   WHITELIST: Site is whitelisted (treat as grade 10)
+   ============================================================================ */
+
+html[data-cf-whitelisted] img,
+html[data-cf-whitelisted] video,
+html[data-cf-whitelisted] iframe,
+html[data-cf-whitelisted] g-img,
+html[data-cf-whitelisted] g-img img,
+html[data-cf-whitelisted] [style*="background-image"] {
+  visibility: visible !important;
+  filter: none !important !important;
+  cursor: auto !important;
+}
+
+/* ============================================================================
+   EXTENSION DISABLED
+   ============================================================================ */
+
+html[data-cf-off] img,
+html[data-cf-off] video,
+html[data-cf-off] iframe,
+html[data-cf-off] g-img,
+html[data-cf-off] g-img img,
+html[data-cf-off] [style*="background-image"] {
+  visibility: visible !important;
+  filter: none !important;
+  cursor: auto !important;
+}
+

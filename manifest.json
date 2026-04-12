@@ -1,19 +1,21 @@
 {
   "manifest_version": 3,
   "name": "Content Filter",
-  "version": "1.0",
-  "description": "Blur all images by default. Double-click to reveal.",
+  "version": "2.0",
+  "description": "Grade-based content filtering with AI learning. Blocks/blurs content 1-10.",
   "action": {
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_title": "Content Filter"
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
       "css": ["content.css"],
-      "js": ["content.js"],
+      "js": ["storage.js", "analyzer.js", "content.js"],
       "run_at": "document_start",
       "all_frames": true
     }
   ],
-  "permissions": ["storage", "tabs"]
+  "permissions": ["storage", "tabs", "webRequest"],
+  "host_permissions": ["<all_urls>"]
 }
