@@ -21,6 +21,7 @@
       border-radius: 12px;
       padding: 16px;
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+      pointer-events: auto;
     }
     h2 {
       font-size: 18px;
@@ -76,6 +77,9 @@
       gap: 8px;
       margin-bottom: 12px;
       flex-wrap: wrap;
+      pointer-events: auto;
+      z-index: 1000;
+      position: relative;
     }
     button {
       flex: 1;
@@ -87,6 +91,15 @@
       border-radius: 6px;
       cursor: pointer;
       transition: all 0.2s;
+      position: relative;
+      z-index: 1000;
+      pointer-events: auto;
+    }
+    button::after {
+      display: none !important;
+    }
+    button::before {
+      display: none !important;
     }
     #toggle {
       background-color: #667eea;
@@ -119,6 +132,8 @@
       border-radius: 8px;
       margin-bottom: 12px;
       border: 1px solid #fbbf24;
+      pointer-events: auto;
+      z-index: 1000;
     }
     .grade-override label {
       display: block;
@@ -172,6 +187,8 @@
     .list-controls {
       display: flex;
       gap: 8px;
+      pointer-events: auto;
+      z-index: 1001;
     }
     #whitelist, #blacklist {
       flex: 1;
@@ -180,6 +197,8 @@
       background-color: #dcfce7;
       color: #15803d;
       border: 1px solid #86efac;
+      pointer-events: auto;
+      z-index: 1001;
     }
     #whitelist:hover, #blacklist:hover {
       background-color: #bbf7d0;

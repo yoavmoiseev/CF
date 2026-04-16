@@ -4,10 +4,24 @@
   const BLOCKED_ATTR = "data-cf-blocked";
   const GRADE_ATTR = "data-cf-grade";
 
+  // Apply grade-6 blur immediately (synchronous, before async storage read).
+  // This prevents a window where no grade attribute exists and images are unblurred.
+  // The async storage read below will overwrite this with the correct grade/whitelist state.
+  if (!document.documentElement.hasAttribute(OFF_ATTR) &&
+      !document.documentElement.hasAttribute('data-cf-whitelisted') &&
+      !document.documentElement.hasAttribute(GRADE_ATTR)) {
+    document.documentElement.setAttribute(GRADE_ATTR, '6');
+  }
+
   // WeakSets live entirely in JS memory — zero DOM mutations on img/video.
-  const blurred  = new WeakSet();
-  const revealed = new WeakSet();
-  const listened = new WeakSet();
+  let blurred  = new WeakSet();
+  let revealed = new WeakSet();
+  let listened = new WeakSet();
+  // Shadow DOM elements with inline blur applied (CSS selectors can't cross shadow root boundaries)
+  let shadowBlurred = new Set();
+  let shadowObservers = new Map();
+  // Shadow roots where we injected a <style data-cf-injected> tag
+  let shadowRootsInjected = new Set();
 
   // Track current settings
   let currentSettings = {
@@ -18,215 +32,245 @@
     blurMode: 'light', // 'none', 'light', 'heavy', 'block'
   };
 
+  // Global flag to stop ALL processing
+  let shouldProcess = true;
+
+  // Track all active timers so we can clear them
+  let activeTimers = [];
+  let observer = null;
+  let interval = null;
+  let mutationDebounceTimer = null;
+
   // Ultra-aggressive selector - catch ALL possible image/video elements including MSN video players
+  // SELECTOR FOR REAL MEDIA - target HTML5 + Google Images web components
+  // Google Images uses: g-img (web component), g-tabs, shadow DOMs
+  // Avoid: SPAN with [role="img"] (UI elements)
   const SELECTOR = `
-    img, video, picture, svg image, g-img, g-img img,
-    iframe,
-    [style*="background-image"], [style*="background-url"],
-    [aria-label*="image"], [aria-label*="photo"], [aria-label*="picture"],
-    [aria-label*="video"], [aria-label*="media"],
-    [role="img"], [role="image"],
-    .image, .picture, .photo, .img,
-    .video, .player, .media-container, .media,
-    [data-image], [data-img], [data-photo], [data-picture],
-    [data-video], [data-media], [data-src], [data-lazy],
-    [class*="video"], [class*="player"], [class*="media"],
-    [id*="video"], [id*="player"], [id*="media"]
+    img,
+    video,
+    picture,
+    g-img,
+    [data-image],
+    [data-img],
+    #image,
+    #photo,
+    #picture,
+    svg image,
+    [style*="background-image: url"],
+    iframe:not([src*="google_ads"]):not([src*="doubleclick"]):not([src*="googleadservices"])
   `.trim();
 
   function collectAll(root) {
-    const found = Array.from(root.querySelectorAll(SELECTOR));
+    // CRITICAL: Skip CDK overlay container - it contains ALL tooltips/popovers
+    const selectorResults = Array.from(root.querySelectorAll(SELECTOR));
     
-    // Expand search for common video/media containers (especially for MSN, news sites)
-    const commonVideoContainers = `
-      [class*="video"], [class*="player"], [class*="media"], [class*="stream"],
-      [id*="video"], [id*="player"], [id*="media"],
-      .video-container, .player-container, .media-container, .stream-container,
-      .video-wrapper, .player-wrapper, .media-wrapper,
-      [data-video], [data-media], [data-player],
-      article img, article video, article iframe,
-      .story img, .story video, .story iframe,
-      .tile img, .tile video, .tile iframe,
-      [role="article"] img, [role="article"] video, [role="article"] iframe,
-      .news-item img, .card img, .item img
-    `.trim().split(',').map(s => s.trim()).join(', ');
-    
-    const containerElements = Array.from(root.querySelectorAll(commonVideoContainers));
-    
-    // Collect web components and their images
-    const webComponentSelectors = `
-      cr-searchbox-dropdown, cr-searchbox-match, cr-searchbox-icon,
-      cr-searchbox-dropdown img, cr-searchbox-match img, cr-searchbox-icon img,
-      g-img, g-img img,
-      .rg_i, .rg_ic, .rg_il, .mimg, .rISBZc,
-      [data-lpage], [data-image], [data-img], [data-photo], [data-picture],
-      [aria-label*="image"], [aria-label*="photo"], [aria-label*="picture"],
-      .gs-image, .lNHeqf, .DhN8ae, .T4LgNb,
-      [jsname], [class*="image"], [class*="photo"], [class*="picture"],
-      [role="option"] img, [role="option"] [style*="background-image"],
-      [aria-controls] img, [id="matches"] img,
-      [role="listbox"] img, [role="list"] img,
-      [class*="dropdown"] img, [class*="autocomplete"] img, [class*="popover"] img
-    `.trim().split(',').map(s => s.trim()).join(', ');
-    
-    const webComponentElements = Array.from(root.querySelectorAll(webComponentSelectors));
-    found.push(...containerElements);
-    
-    // Also search within dropdown/popover containers
-    const dropdownContainers = root.querySelectorAll('[role="listbox"], [role="option"], [id="matches"], [class*="dropdown"], [class*="autocomplete"], [class*="popover"], cr-searchbox-dropdown');
-    dropdownContainers.forEach(container => {
-      found.push(...Array.from(container.querySelectorAll('img, video, g-img, [style*="background-image"]')));
+    const found = selectorResults.filter(el => {
+      // Exclude any element inside CDK overlay container
+      return !el.closest('.cdk-overlay-container');
     });
     
-    // Aggressively search shadow DOMs - multiple passes
-    function searchShadows(el) {
-      if (el.shadowRoot) {
-        const shadowImages = Array.from(el.shadowRoot.querySelectorAll('img, video, g-img, [style*="background-image"]'));
-        found.push(...shadowImages);
-        
-        // Recursively search child elements' shadow DOMs
+    // Shadow DOM search — only custom elements (tag contains hyphen, per web spec)
+    // Avoids expensive querySelectorAll('*') on large Angular DOMs
+    function searchShadows(el, depth = 0) {
+      if (!el.shadowRoot || depth > 4) return [];
+      const images = [];
+      try {
+        // Standard media + inline background-image elements
+        images.push(...Array.from(el.shadowRoot.querySelectorAll(
+          'img, video, g-img, [data-image], [style*="background-image: url"]'
+        )));
+        // Pseudo-element background-images (e.g. heading::after on MSN hero carousel)
+        // Only check 2 levels deep inside shadow root to avoid perf hit
+        el.shadowRoot.querySelectorAll(':scope > *, :scope > * > *').forEach(child => {
+          try {
+            const afterBg = window.getComputedStyle(child, '::after').backgroundImage;
+            const beforeBg = window.getComputedStyle(child, '::before').backgroundImage;
+            if ((afterBg && afterBg !== 'none' && afterBg.includes('url')) ||
+                (beforeBg && beforeBg !== 'none' && beforeBg.includes('url'))) {
+              images.push(child);
+            }
+          } catch (e) {}
+        });
+        // Watch this shadow root for dynamic changes (rotating hero, lazy load)
+        observeShadowRoot(el.shadowRoot);
+        // Recurse into nested shadow roots
         el.shadowRoot.querySelectorAll('*').forEach(child => {
-          if (child.shadowRoot) {
-            searchShadows(child);
+          if (child.tagName && child.tagName.includes('-') && child.shadowRoot) {
+            images.push(...searchShadows(child, depth + 1));
           }
         });
+      } catch (e) {}
+      return images;
+    }
+
+    try {
+      // Only check custom elements for shadow roots (have hyphens — web components spec)
+      root.querySelectorAll('*').forEach(el => {
+        if (el.tagName && el.tagName.includes('-') && el.shadowRoot) {
+          found.push(...searchShadows(el));
+        }
+      });
+    } catch (e) {
+      console.log('[CF] collectAll: shadow search error:', e.message);
+    }
+    
+    // Remove duplicates
+    return [...new Set(found)];
+  }
+  // Returns the CSS filter value for a given grade (for shadow DOM inline styles)
+  function getBlurForGrade(grade) {
+    if (grade <= 5) return "blur(40px) brightness(0.05)";
+    if (grade <= 7) return "blur(25px) brightness(0.2)";
+    if (grade <= 9) return "blur(15px) brightness(0.4)";
+    return null;
+  }
+
+  // Removes inline filter from all shadow DOM elements and removes injected style tags
+  function clearShadowStyles() {
+    for (const el of shadowBlurred) {
+      try { el.style.removeProperty("filter"); } catch (e) {}
+    }
+    shadowBlurred = new Set();
+    // Remove injected <style> tags from all tracked shadow roots
+    for (const sr of shadowRootsInjected) {
+      try {
+        const injected = sr.querySelector('style[data-cf-injected]');
+        if (injected) injected.remove();
+      } catch (e) {}
+    }
+    shadowRootsInjected = new Set();
+  }
+
+  // Observe a shadow root for attribute/child changes (hero carousels etc.)
+  function observeShadowRoot(sr) {
+    if (!sr || shadowObservers.has(sr)) return;
+    const obs = new MutationObserver((mutations) => {
+      // Immediately inject CSS into new shadow roots on child additions — no debounce.
+      // Prevents hero/carousel flash: MSN creates new shadow roots each slide swap.
+      if (shouldProcess && mutations.some(m => m.type === 'childList' && m.addedNodes.length)) {
+        injectShadowStyles();
       }
-    }
-    
-    // Start shadow DOM search from root and all its children
-    searchShadows(root);
-    root.querySelectorAll("*").forEach(el => searchShadows(el));
-    
-    return [...new Set(found)]; // Remove duplicates
+      clearTimeout(mutationDebounceTimer);
+      mutationDebounceTimer = setTimeout(() => processAll(), 150);
+    });
+    obs.observe(sr, {
+      childList: true, subtree: true,
+      attributes: true, attributeFilter: ['style', 'class', 'src', 'data-src']
+    });
+    shadowObservers.set(sr, obs);
   }
 
-  // ── Apply blur based on current settings ───────────────────────────────────
-  function applyBlur(el) {
-    if (revealed.has(el) || blurred.has(el)) return;
-
-    // Grade 1-3 and blacklist are handled by CSS completely
-    if (currentSettings.isBlacklisted || currentSettings.grade <= 3) {
-      return; // CSS blocks everything
+  // Disconnect and clear all per-shadow-root observers
+  function clearShadowObservers() {
+    for (const obs of shadowObservers.values()) {
+      try { obs.disconnect(); } catch (e) {}
     }
-
-    // Grade 10 and whitelist - no blur needed
-    if (currentSettings.isWhitelisted || currentSettings.grade >= 10) {
-      el.style.removeProperty("filter");
-      el.style.removeProperty("cursor");
-      return;
-    }
-
-    // Grade 4-9 - CSS handles the blur, but apply inline backup + enable double-click reveal
-    blurred.add(el);
-    
-    // Apply inline backup blur styles in case page CSS overrides it
-    const blurIntensity = currentSettings.grade <= 5 ? '35px' :
-                          currentSettings.grade <= 7 ? '15px' : '8px';
-    const brightness = currentSettings.grade <= 5 ? '0.3' :
-                       currentSettings.grade <= 7 ? '0.5' : '0.7';
-    el.style.setProperty("filter", `blur(${blurIntensity}) brightness(${brightness})`, "important");
-    el.style.setProperty("visibility", "visible", "important");
-    el.style.setProperty("cursor", "pointer", "important");
-
-    if (!listened.has(el)) {
-      listened.add(el);
-      el.addEventListener("dblclick", onDblClick, true);
-    }
+    shadowObservers = new Map();
   }
 
-  function applyBlockStyle(el) {
-    blurred.add(el);
-    // Fully hide blocked content - multiple layers to ensure invisibility
-    el.style.setProperty("display", "none", "important");
-    el.style.setProperty("visibility", "hidden", "important");
-    el.style.setProperty("width", "0", "important");
-    el.style.setProperty("height", "0", "important");
-    el.style.setProperty("margin", "0", "important");
-    el.style.setProperty("padding", "0", "important");
-  }
+  // Inject blur CSS directly into every shadow root in the document tree.
+  // This is the ONLY way to style elements across shadow root boundaries.
+  // Extension CSS (content.css) and regular selectors cannot pierce shadow DOM.
+  function injectShadowStyles() {
+    if (!shouldProcess) return;
+    const blurVal = getBlurForGrade(currentSettings.grade);
+    if (!blurVal) return;
+    const css = `img,video,picture,[style*="background-image"]{filter:${blurVal}!important}`;
 
-  function removeBlur(el) {
-    blurred.delete(el);
-    el.style.removeProperty("filter");
-    el.style.removeProperty("cursor");
-    el.style.removeProperty("transition");
-    el.style.removeProperty("display");
-    el.style.removeProperty("visibility");
+    function traverse(root) {
+      root.querySelectorAll('*').forEach(el => {
+        if (!el.shadowRoot) return;
+        const sr = el.shadowRoot;
+        // Update or inject the <style> tag
+        const existing = sr.querySelector('style[data-cf-injected]');
+        if (existing) {
+          if (existing.textContent !== css) existing.textContent = css;
+        } else {
+          const style = document.createElement('style');
+          style.setAttribute('data-cf-injected', '1');
+          style.textContent = css;
+          sr.insertBefore(style, sr.firstChild);
+          shadowRootsInjected.add(sr);
+        }
+        // Watch shadow root for dynamic content (carousels, lazy load)
+        observeShadowRoot(sr);
+        // Recurse — querySelectorAll does NOT cross nested shadow roots
+        traverse(sr);
+      });
+    }
+
+    traverse(document);
+  }
+  // ── Click capture: block link navigation while element is blurred ───────────
+  // Prevents <a> parent links from firing when user single-clicks a blurred element.
+  // After dblclick reveals the element (revealed.add(el)), clicks pass through normally.
+  function onClickCapture(e) {
+    const el = e.currentTarget;
+    if (shouldProcess && !revealed.has(el)) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }
   }
 
   // ── Double-click reveal ─────────────────────────────────────────────────────
+  // CSS handles all visual blur via html[data-cf-grade] attribute on <html>.
+  // JS only handles user-initiated reveal / re-blur via double-click.
   function onDblClick(e) {
     const el = e.currentTarget;
-    if (!el.matches(SELECTOR)) return;
     e.preventDefault();
     e.stopImmediatePropagation();
-    
-    // Prevent revealing if site is blocked/blacklisted
-    if (currentSettings.isBlacklisted || currentSettings.grade <= 3) {
-      console.log('[CF] Cannot reveal - site is blocked/blacklisted');
-      return;
-    }
+
+    if (currentSettings.isBlacklisted || currentSettings.grade <= 3) return;
 
     if (revealed.has(el)) {
-      // Already revealed, hide it again
+      // Re-blur: remove inline override so CSS grade rule takes over again
       revealed.delete(el);
-      applyBlur(el);
+      el.style.removeProperty("filter");
+      el.style.removeProperty("visibility");
+      el.style.removeProperty("cursor");
+      // Shadow DOM: CSS can't reapply blur after removing inline override — do it inline
+      if (shadowBlurred.has(el)) {
+        const blurVal = getBlurForGrade(currentSettings.grade);
+        if (blurVal) el.style.setProperty("filter", blurVal, "important");
+      }
     } else {
-      // Reveal - remove blur
+      // Reveal: override CSS blur with inline filter:none
       revealed.add(el);
       el.style.setProperty("filter", "none", "important");
-      el.style.setProperty("cursor", "pointer", "important");
       el.style.setProperty("visibility", "visible", "important");
+      el.style.setProperty("cursor", "pointer", "important");
     }
   }
 
-  // ── Sweep: reinforce blur on all unrevealed elements ───────────────────────
+  // ── Register dblclick listeners on new media elements ──────────────────────
+  // CSS handles all visual blur via html[data-cf-grade] on <html>.
+  // JS only attaches dblclick listeners for user-initiated reveal.
+  // NO inline style mutations here — avoids triggering Angular change detection loops.
   function processAll() {
+    if (!shouldProcess) return;
     if (document.documentElement.hasAttribute(OFF_ATTR)) return;
-    
-    // For grade 1-3 and blacklist, CSS handles blocking - just enforce it
-    if (currentSettings.isBlacklisted || currentSettings.grade <= 3) {
-      return;
-    }
+    if (currentSettings.isWhitelisted || currentSettings.grade >= 10) return;
+    if (currentSettings.isBlacklisted || currentSettings.grade <= 3) return;
 
-    // For grade 4+, apply blur via CSS, JS just helps with cleanup
-    collectAll(document).forEach(el => {
-      if (!revealed.has(el)) {
-        applyBlur(el);
-      }
-    });
-
-    checkForUnblurredMedia();
-  }
-
-  // ── Safety check: ensure no image is visible without blur ─────────────────
-  function checkForUnblurredMedia() {
-    if (document.documentElement.hasAttribute(OFF_ATTR)) return;
+    // Inject CSS into every shadow root — the only way to blur shadow DOM content
+    injectShadowStyles();
 
     collectAll(document).forEach(el => {
-      if (revealed.has(el)) return; // Skip revealed elements
-      
-      const computedStyle = window.getComputedStyle(el);
-      const hasBlur = computedStyle.filter && computedStyle.filter !== 'none';
-      const isVisible = computedStyle.visibility !== 'hidden' && computedStyle.display !== 'none';
-
-      // If visible but no blur, force blur
-      if (isVisible && !hasBlur && !blurred.has(el)) {
-        applyBlur(el);
-      }
-
-      // If should be hidden (grade 1-3) but is visible, hide it
-      if (currentSettings.isBlacklisted || currentSettings.grade <= 3) {
-        if (computedStyle.display !== 'none' || computedStyle.visibility !== 'hidden') {
-          applyBlockStyle(el);
-        }
+      if (listened.has(el)) return;
+      listened.add(el);
+      blurred.add(el);
+      el.addEventListener("click", onClickCapture, true);
+      el.addEventListener("dblclick", onDblClick, true);
+      // Shadow DOM elements: extension CSS can't cross shadow root boundaries — apply inline filter
+      if (el.getRootNode() !== document) {
+        shadowBlurred.add(el);
+        const blurVal = getBlurForGrade(currentSettings.grade);
+        if (blurVal) el.style.setProperty("filter", blurVal, "important");
       }
     });
   }
 
   // ── Enable / disable ────────────────────────────────────────────────────────
-  let observer = null;
-  let interval = null;
 
   function applyGradeToPage() {
     // Clear all grade attributes first
@@ -253,38 +297,121 @@
   }
 
   function enable() {
+    // Don't auto-process for whitelisted or grade 10 sites - just set attribute
+    // These sites should not have blur applied, and constant DOM scanning breaks pages
+    if (currentSettings.isWhitelisted || currentSettings.grade >= 10) {
+      shouldProcess = false;
+      applyGradeToPage();
+      
+      // Remove only the inline filter overrides we may have set on revealed media elements.
+      // Do NOT touch other inline styles — Angular uses them for layout/positioning.
+      try {
+        for (const el of document.querySelectorAll('img, video, iframe, picture')) {
+          el.style.removeProperty("filter");
+          el.style.removeProperty("visibility");
+          el.style.removeProperty("cursor");
+        }
+      } catch (e) {}
+
+      clearShadowStyles();
+      clearShadowObservers();
+      console.log('[CF] Grade 10/Whitelist - disabled processing, cleaned media inline styles');
+      return;
+    }
+
+    // Enable processing for grades 1-9
+    shouldProcess = true;
+
     if (!currentSettings.enabled) return;
     document.documentElement.removeAttribute(OFF_ATTR);
     applyGradeToPage();
     
+    console.log('[CF] ENABLE called - starting processing. Grade:', currentSettings.grade);
+    
     if (!observer) {
       observer = new MutationObserver((mutations) => {
-        // Reapply on major DOM changes
-        applyGradeToPage();
-        processAll();
+        // If new DOM nodes were added, immediately inject blur CSS into any new shadow roots.
+        // This prevents carousel/hero flash: new shadow roots are blurred before browser paints.
+        // (processAll below is debounced and would be too slow to prevent the flash)
+        if (shouldProcess && mutations.some(m => m.type === 'childList' && m.addedNodes.length)) {
+          injectShadowStyles();
+        }
+        // Debounce the full processAll() to avoid thrash on Angular SPAs
+        clearTimeout(mutationDebounceTimer);
+        mutationDebounceTimer = setTimeout(() => {
+          processAll();
+        }, 120);
       });
       observer.observe(document.documentElement, { childList: true, subtree: true });
+      console.log('[CF] MutationObserver started (debounced 120ms)');
     }
-    // Balanced sweep every 250ms - fast enough to catch dynamic content, slow enough for stability
-    if (!interval) interval = setInterval(() => {
-      applyGradeToPage();
-      processAll();
-    }, 250);
+    // Sweep every 500ms for dynamically loaded content
+    if (!interval) {
+      interval = setInterval(() => {
+        processAll();
+      }, 500);
+      console.log('[CF] Interval started - will process every 500ms');
+    }
     
-    // Additional aggressive sweeps for MSN-like sites where content loads after page init
-    setTimeout(() => { applyGradeToPage(); processAll(); }, 50);
-    setTimeout(() => { applyGradeToPage(); processAll(); }, 150);
-    setTimeout(() => { applyGradeToPage(); processAll(); }, 300);
-    setTimeout(() => { applyGradeToPage(); processAll(); }, 700);
-    setTimeout(() => { applyGradeToPage(); processAll(); }, 1500);
+    // Additional sweeps for MSN-like sites where content loads after page init
+    activeTimers.push(setTimeout(() => { processAll(); }, 100));
+    activeTimers.push(setTimeout(() => { processAll(); }, 400));
+    activeTimers.push(setTimeout(() => { processAll(); }, 1000));
+    activeTimers.push(setTimeout(() => { processAll(); }, 2500));
   }
 
   function disable() {
+    // Stop all active processing with master switch FIRST
+    shouldProcess = false;
+    
+    // IMMEDIATELY disconnect observer BEFORE doing anything else
+    if (observer) { 
+      observer.disconnect(); 
+      observer = null; 
+    }
+    clearTimeout(mutationDebounceTimer);
+    mutationDebounceTimer = null;
+    clearInterval(interval); 
+    interval = null;
+    
+    // Stop all timers
+    activeTimers.forEach(timerId => clearTimeout(timerId));
+    activeTimers = [];
+    
+    // Set OFF attribute FIRST to prevent CSS rules from applying
     document.documentElement.setAttribute(OFF_ATTR, "1");
     document.documentElement.removeAttribute(GRADE_ATTR);
-    if (observer) { observer.disconnect(); observer = null; }
-    clearInterval(interval); interval = null;
-    collectAll(document).forEach(removeBlur);
+    document.documentElement.removeAttribute('data-cf-whitelisted');
+    document.documentElement.removeAttribute('data-cf-blacklisted');
+    
+    // Remove only inline filter overrides from media elements (set by dblclick reveal).
+    // Do NOT touch other inline styles — Angular uses them for layout/positioning.
+    try {
+      for (const el of document.querySelectorAll('img, video, iframe, picture')) {
+        el.style.removeProperty("filter");
+        el.style.removeProperty("visibility");
+        el.style.removeProperty("cursor");
+      }
+    } catch (e) {}
+    
+    // Clear shadow DOM inline styles
+    clearShadowStyles();
+    clearShadowObservers();
+
+    // Clear all WeakSets
+    blurred  = new WeakSet();
+    revealed = new WeakSet();
+    listened = new WeakSet();
+    
+    currentSettings = {
+      enabled: false,
+      grade: 6,
+      isWhitelisted: false,
+      isBlacklisted: false,
+      blurMode: 'none',
+    };
+    
+    console.log('[CF] Extension completely disabled - all styles removed');
   }
 
   // ── Get domain from URL ────────────────────────────────────────────────────
@@ -441,24 +568,69 @@
       currentSettings.grade = request.grade;
       currentSettings.isWhitelisted = false;
       currentSettings.isBlacklisted = false;
-      applyGradeToPage();
-      processAll();
+      
+      // If grade 10, disable processing
+      if (request.grade >= 10) {
+        disable();
+      } else {
+        applyGradeToPage();
+        processAll();
+      }
       console.log('[CF] Grade updated to:', request.grade);
       sendResponse({ success: true });
     }
     
     if (request.action === 'toggleWhitelist') {
+      console.log('[CF] Whitelist toggled:', request.whitelisted);
+      
       currentSettings.isWhitelisted = request.whitelisted;
       currentSettings.isBlacklisted = false;
-      applyGradeToPage();
-      processAll();
-      console.log('[CF] Whitelist toggled:', request.whitelisted);
+      
+      // If whitelisted, AGGRESSIVELY clean everything
+      if (request.whitelisted) {
+        console.log('[CF] Site added to whitelist - aggressive cleanup');
+        shouldProcess = false;
+        
+        // Disconnect observer and timers FIRST
+        if (observer) { observer.disconnect(); observer = null; }
+        clearInterval(interval); interval = null;
+        activeTimers.forEach(t => clearTimeout(t)); activeTimers = [];
+        
+        // Set whitelist attribute
+        document.documentElement.setAttribute('data-cf-whitelisted', '1');
+        document.documentElement.removeAttribute(OFF_ATTR);
+        document.documentElement.removeAttribute(GRADE_ATTR);
+        document.documentElement.removeAttribute('data-cf-blacklisted');
+        
+        // Remove only inline filter overrides from media elements (set by dblclick reveal).
+        // Do NOT touch other inline styles — Angular uses them for layout/positioning.
+        try {
+          for (const el of document.querySelectorAll('img, video, iframe, picture')) {
+            el.style.removeProperty("filter");
+            el.style.removeProperty("visibility");
+            el.style.removeProperty("cursor");
+          }
+        } catch (e) {}
+
+        clearShadowStyles();
+        clearShadowObservers();
+        console.log('[CF] Whitelist applied - media inline styles cleared');
+      } else {
+        // Remove from whitelist - re-enable processing
+        currentSettings.isWhitelisted = false;
+        applyGradeToPage();
+        enable();
+        console.log('[CF] Whitelist removed - reprocessing page');
+      }
+      
       sendResponse({ success: true });
     }
     
     if (request.action === 'toggleBlacklist') {
       currentSettings.isBlacklisted = request.blacklisted;
       currentSettings.isWhitelisted = false;
+      
+      // Blacklist still needs to process (to show blocking message)
       applyGradeToPage();
       processAll();
       console.log('[CF] Blacklist toggled:', request.blacklisted);
@@ -468,6 +640,16 @@
     if (request.action === 'refresh') {
       // Refresh filter settings
       initializeFilter();
+      sendResponse({ success: true });
+    }
+    
+    if (request.action === 'toggleOff') {
+      // Explicitly turn OFF the extension
+      console.log('[CF] TOGGLE OFF received - disabling extension');
+      currentSettings.enabled = false;
+      disable();
+      console.log('[CF] Extension toggled OFF - shouldProcess =', shouldProcess);
+      console.log('[CF] OFF attribute set:', document.documentElement.hasAttribute(OFF_ATTR));
       sendResponse({ success: true });
     }
   });
@@ -527,7 +709,14 @@
         return;
       }
 
-      // Wait for DOM to be ready
+      // For whitelisted or grade 10 sites, don't run processing - just set attribute
+      if (currentSettings.isWhitelisted || currentSettings.grade >= 10) {
+        applyGradeToPage();
+        console.log('[CF] Site whitelisted or grade 10 - no processing');
+        return;
+      }
+
+      // Wait for DOM to be ready - only if we need to process
       if (document.readyState === "complete" || document.readyState === "interactive") {
         enable();
       } else {

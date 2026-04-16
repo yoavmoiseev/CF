@@ -1,5 +1,12 @@
 /* Content Filter CSS - Applied at document_start before page JS runs */
 
+/* CDK/tooltip exclusions are declared at the BOTTOM of this file with high specificity
+   so they correctly override the blur rules. Low-specificity rules here would be ignored. */
+
+/* Background images on structural layout elements are NOT stripped —
+   only actual inline [style*="background-image"] content elements are blurred via
+   the grade-based rules below. Removing bg-images from containers breaks layouts. */
+
 /* ============================================================================
    FULL-SITE BLOCKING FOR GRADE 1-3 (ADULT/DANGEROUS)
    ============================================================================ */
@@ -57,6 +64,24 @@ html[data-cf-blacklisted] body {
   visibility: hidden !important;
 }
 
+/* ============================================================================
+   WHITELISTED SITES: Remove all filter overrides - nothing else
+   ============================================================================ */
+
+/* Only remove filter — do NOT touch display/visibility/opacity/dimensions.
+   Angular Material uses those for its own state management. */
+html[data-cf-whitelisted] * {
+  filter: none !important;
+}
+
+/* ============================================================================
+   EXTENSION OFF: Remove all filter overrides - nothing else
+   ============================================================================ */
+
+html[data-cf-off] * {
+  filter: none !important;
+}
+
 html[data-cf-blacklisted]::after {
   content: "🚫 SITE BLACKLISTED - Blocked by Content Filter" !important;
   position: fixed !important;
@@ -77,95 +102,75 @@ html[data-cf-blacklisted]::after {
 }
 
 /* ============================================================================
-   DEFAULT MEDIA BLUR (before grade logic is applied)
+   DEFAULT MEDIA BLUR: Safety net — fires for ALL active grades except 10/whitelist/off.
+   Ensures images are never visible before JS determines the grade.
+   Uses filter only (NOT visibility) so Angular layout is unaffected.
+   Specificity: (0,3,2) — grade rules below use same spec, come later → override.
    ============================================================================ */
 
-/* All media elements default to blur+hidden */
-img, video, picture, g-img, g-img img, svg image,
-iframe,
-[style*="background-image"], [style*="background-url"],
-[aria-label*="image"], [aria-label*="photo"],
-[role="img"], [role="image"],
-.image, .picture, .photo, .img,
-[data-image], [data-img], [data-photo],
-[data-video], [data-media], [data-src], [data-lazy],
-[class*="image"], [class*="photo"],
-[class*="video"], [class*="player"], [class*="media"],
-[class*="container"],
-[id*="image"], [id*="img"], [id*="video"],
-cr-searchbox-icon img,
-cr-searchbox-match img,
-cr-searchbox-dropdown img {
-  filter: blur(20px) brightness(0.6) !important;
-  visibility: hidden !important;
-  cursor: pointer !important;
-}
-
-img[loading="lazy"], img[data-src], img[data-lazy] {
-  visibility: hidden !important;
+html:not([data-cf-off]):not([data-cf-whitelisted]):not([data-cf-grade="10"]) img,
+html:not([data-cf-off]):not([data-cf-whitelisted]):not([data-cf-grade="10"]) video,
+html:not([data-cf-off]):not([data-cf-whitelisted]):not([data-cf-grade="10"]) picture,
+html:not([data-cf-off]):not([data-cf-whitelisted]):not([data-cf-grade="10"]) [style*="background-image: url"] {
+  filter: blur(40px) brightness(0.05) !important;
 }
 
 /* ============================================================================
    GRADE 4-5: HEAVY BLUR (Finance, Medical, Adult-light)
+   Specificity (0,3,2) = same as DEFAULT but comes LATER → overrides.
    ============================================================================ */
 
-html[data-cf-grade="4"] img,
-html[data-cf-grade="4"] video,
-html[data-cf-grade="4"] iframe,
-html[data-cf-grade="4"] g-img,
-html[data-cf-grade="4"] g-img img,
-html[data-cf-grade="4"] [style*="background-image"],
-html[data-cf-grade="5"] img,
-html[data-cf-grade="5"] video,
-html[data-cf-grade="5"] iframe,
-html[data-cf-grade="5"] g-img,
-html[data-cf-grade="5"] g-img img,
-html[data-cf-grade="5"] [style*="background-image"] {
-  visibility: visible !important;
-  filter: blur(35px) brightness(0.3) !important;
-  cursor: pointer !important;
+html[data-cf-grade="4"]:not([data-cf-off]):not([data-cf-whitelisted]) img,
+html[data-cf-grade="4"]:not([data-cf-off]):not([data-cf-whitelisted]) video,
+html[data-cf-grade="4"]:not([data-cf-off]):not([data-cf-whitelisted]) iframe,
+html[data-cf-grade="4"]:not([data-cf-off]):not([data-cf-whitelisted]) g-img,
+html[data-cf-grade="4"]:not([data-cf-off]):not([data-cf-whitelisted]) g-img img,
+html[data-cf-grade="4"]:not([data-cf-off]):not([data-cf-whitelisted]) [style*="background-image: url"],
+html[data-cf-grade="5"]:not([data-cf-off]):not([data-cf-whitelisted]) img,
+html[data-cf-grade="5"]:not([data-cf-off]):not([data-cf-whitelisted]) video,
+html[data-cf-grade="5"]:not([data-cf-off]):not([data-cf-whitelisted]) iframe,
+html[data-cf-grade="5"]:not([data-cf-off]):not([data-cf-whitelisted]) g-img,
+html[data-cf-grade="5"]:not([data-cf-off]):not([data-cf-whitelisted]) g-img img,
+html[data-cf-grade="5"]:not([data-cf-off]):not([data-cf-whitelisted]) [style*="background-image: url"] {
+  filter: blur(40px) brightness(0.05) !important;
 }
 
 /* ============================================================================
    GRADE 6-7: MEDIUM BLUR (Education, Tech, News-light)
    ============================================================================ */
 
-html[data-cf-grade="6"] img,
-html[data-cf-grade="6"] video,
-html[data-cf-grade="6"] iframe,
-html[data-cf-grade="6"] g-img,
-html[data-cf-grade="6"] g-img img,
-html[data-cf-grade="6"] [style*="background-image"],
-html[data-cf-grade="7"] img,
-html[data-cf-grade="7"] video,
-html[data-cf-grade="7"] iframe,
-html[data-cf-grade="7"] g-img,
-html[data-cf-grade="7"] g-img img,
-html[data-cf-grade="7"] [style*="background-image"] {
-  visibility: visible !important;
-  filter: blur(15px) brightness(0.5) !important;
-  cursor: pointer !important;
+html[data-cf-grade="6"]:not([data-cf-off]):not([data-cf-whitelisted]) img,
+html[data-cf-grade="6"]:not([data-cf-off]):not([data-cf-whitelisted]) video,
+html[data-cf-grade="6"]:not([data-cf-off]):not([data-cf-whitelisted]) iframe,
+html[data-cf-grade="6"]:not([data-cf-off]):not([data-cf-whitelisted]) g-img,
+html[data-cf-grade="6"]:not([data-cf-off]):not([data-cf-whitelisted]) g-img img,
+html[data-cf-grade="6"]:not([data-cf-off]):not([data-cf-whitelisted]) [style*="background-image: url"],
+html[data-cf-grade="7"]:not([data-cf-off]):not([data-cf-whitelisted]) img,
+html[data-cf-grade="7"]:not([data-cf-off]):not([data-cf-whitelisted]) video,
+html[data-cf-grade="7"]:not([data-cf-off]):not([data-cf-whitelisted]) iframe,
+html[data-cf-grade="7"]:not([data-cf-off]):not([data-cf-whitelisted]) g-img,
+html[data-cf-grade="7"]:not([data-cf-off]):not([data-cf-whitelisted]) g-img img,
+html[data-cf-grade="7"]:not([data-cf-off]):not([data-cf-whitelisted]) [style*="background-image: url"] {
+  filter: blur(25px) brightness(0.2) !important;
 }
 
 /* ============================================================================
-   GRADE 8-9: MINIMAL BLUR (Tech, News, Quality content)
+   GRADE 8-9: MODERATE BLUR (Tech, News, Quality content)
    ============================================================================ */
 
-html[data-cf-grade="8"] img,
-html[data-cf-grade="8"] video,
-html[data-cf-grade="8"] iframe,
-html[data-cf-grade="8"] g-img,
-html[data-cf-grade="8"] g-img img,
-html[data-cf-grade="8"] [style*="background-image"],
-html[data-cf-grade="9"] img,
-html[data-cf-grade="9"] video,
-html[data-cf-grade="9"] iframe,
-html[data-cf-grade="9"] g-img,
-html[data-cf-grade="9"] g-img img,
-html[data-cf-grade="9"] [style*="background-image"] {
-  visibility: visible !important;
-  filter: blur(8px) brightness(0.7) !important;
-  cursor: pointer !important;
+html[data-cf-grade="8"]:not([data-cf-off]):not([data-cf-whitelisted]) img,
+html[data-cf-grade="8"]:not([data-cf-off]):not([data-cf-whitelisted]) video,
+html[data-cf-grade="8"]:not([data-cf-off]):not([data-cf-whitelisted]) iframe,
+html[data-cf-grade="8"]:not([data-cf-off]):not([data-cf-whitelisted]) g-img,
+html[data-cf-grade="8"]:not([data-cf-off]):not([data-cf-whitelisted]) g-img img,
+html[data-cf-grade="8"]:not([data-cf-off]):not([data-cf-whitelisted]) [style*="background-image: url"],
+html[data-cf-grade="9"]:not([data-cf-off]):not([data-cf-whitelisted]) img,
+html[data-cf-grade="9"]:not([data-cf-off]):not([data-cf-whitelisted]) video,
+html[data-cf-grade="9"]:not([data-cf-off]):not([data-cf-whitelisted]) iframe,
+html[data-cf-grade="9"]:not([data-cf-off]):not([data-cf-whitelisted]) g-img,
+html[data-cf-grade="9"]:not([data-cf-off]):not([data-cf-whitelisted]) g-img img,
+html[data-cf-grade="9"]:not([data-cf-off]):not([data-cf-whitelisted]) [style*="background-image: url"] {
+  filter: blur(15px) brightness(0.4) !important;
 }
 
 /* ============================================================================
@@ -176,11 +181,8 @@ html[data-cf-grade="10"] img,
 html[data-cf-grade="10"] video,
 html[data-cf-grade="10"] iframe,
 html[data-cf-grade="10"] g-img,
-html[data-cf-grade="10"] g-img img,
-html[data-cf-grade="10"] [style*="background-image"] {
-  visibility: visible !important;
+html[data-cf-grade="10"] g-img img {
   filter: none !important;
-  cursor: auto !important;
 }
 
 /* ============================================================================
@@ -191,11 +193,8 @@ html[data-cf-whitelisted] img,
 html[data-cf-whitelisted] video,
 html[data-cf-whitelisted] iframe,
 html[data-cf-whitelisted] g-img,
-html[data-cf-whitelisted] g-img img,
-html[data-cf-whitelisted] [style*="background-image"] {
-  visibility: visible !important;
-  filter: none !important !important;
-  cursor: auto !important;
+html[data-cf-whitelisted] g-img img {
+  filter: none !important;
 }
 
 /* ============================================================================
@@ -206,10 +205,52 @@ html[data-cf-off] img,
 html[data-cf-off] video,
 html[data-cf-off] iframe,
 html[data-cf-off] g-img,
-html[data-cf-off] g-img img,
-html[data-cf-off] [style*="background-image"] {
-  visibility: visible !important;
+html[data-cf-off] g-img img {
   filter: none !important;
-  cursor: auto !important;
+}
+
+/* ============================================================================
+   UNIVERSAL OVERRIDES FOR WHITELISTED AND DISABLED
+   ============================================================================ */
+
+/* Filter:none for all elements when extension is OFF.
+   Do NOT force visibility/opacity — Angular uses those for its own animations. */
+html[data-cf-off] * {
+  filter: none !important;
+}
+
+/* Filter:none for all elements when site is WHITELISTED. */
+html[data-cf-whitelisted] * {
+  filter: none !important;
+}
+
+/* Filter:none for GRADE 10 (no filtering). */
+html[data-cf-grade="10"] * {
+  filter: none !important;
+}
+
+/* ============================================================================
+   CDK / TOOLTIP EXCLUSIONS
+   MUST be at the END of this file. The blur rule specificity is (0,3,2).
+   These rules have specificity (0,4,2) so they correctly win.
+   ============================================================================ */
+
+html:not([data-cf-off]):not([data-cf-whitelisted]):not([data-cf-grade="10"]) .cdk-overlay-container,
+html:not([data-cf-off]):not([data-cf-whitelisted]):not([data-cf-grade="10"]) .cdk-overlay-container img,
+html:not([data-cf-off]):not([data-cf-whitelisted]):not([data-cf-grade="10"]) .cdk-overlay-container video,
+html:not([data-cf-off]):not([data-cf-whitelisted]):not([data-cf-grade="10"]) .cdk-overlay-container *,
+html:not([data-cf-off]):not([data-cf-whitelisted]):not([data-cf-grade="10"]) .cdk-overlay-pane,
+html:not([data-cf-off]):not([data-cf-whitelisted]):not([data-cf-grade="10"]) .cdk-overlay-pane *,
+html:not([data-cf-off]):not([data-cf-whitelisted]):not([data-cf-grade="10"]) [role="tooltip"],
+html:not([data-cf-off]):not([data-cf-whitelisted]):not([data-cf-grade="10"]) [role="tooltip"] *,
+html:not([data-cf-off]):not([data-cf-whitelisted]):not([data-cf-grade="10"]) [class*="tooltip"],
+html:not([data-cf-off]):not([data-cf-whitelisted]):not([data-cf-grade="10"]) [class*="tooltip"] *,
+html:not([data-cf-off]):not([data-cf-whitelisted]):not([data-cf-grade="10"]) [class*="popover"],
+html:not([data-cf-off]):not([data-cf-whitelisted]):not([data-cf-grade="10"]) [class*="popover"] *,
+html:not([data-cf-off]):not([data-cf-whitelisted]):not([data-cf-grade="10"]) [role="dialog"],
+html:not([data-cf-off]):not([data-cf-whitelisted]):not([data-cf-grade="10"]) [role="alert"],
+html:not([data-cf-off]):not([data-cf-whitelisted]):not([data-cf-grade="10"]) .mat-tooltip,
+html:not([data-cf-off]):not([data-cf-whitelisted]):not([data-cf-grade="10"]) .mat-mdc-tooltip {
+  filter: none !important;
 }
 

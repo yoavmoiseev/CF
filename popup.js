@@ -62,19 +62,39 @@ function updateUI() {
 
     // Update whitelist/blacklist buttons
     if (whitelist.includes(currentDomain)) {
-      whitelistBtn.textContent = "✓ Whitelisted";
-      whitelistBtn.style.opacity = "0.6";
+      whitelistBtn.textContent = "✓ WHITELISTED";
+      whitelistBtn.style.opacity = "1";
+      whitelistBtn.style.fontWeight = "bold";
+      whitelistBtn.style.backgroundColor = "#22c55e"; // Bright green
+      whitelistBtn.style.color = "white";
+      whitelistBtn.style.borderColor = "#16a34a";
+      whitelistBtn.style.boxShadow = "0 0 8px rgba(34, 197, 94, 0.4)";
     } else {
       whitelistBtn.textContent = "✓ Whitelist";
       whitelistBtn.style.opacity = "1";
+      whitelistBtn.style.fontWeight = "normal";
+      whitelistBtn.style.backgroundColor = "#dcfce7";
+      whitelistBtn.style.color = "#15803d";
+      whitelistBtn.style.borderColor = "#86efac";
+      whitelistBtn.style.boxShadow = "none";
     }
 
     if (blacklist.includes(currentDomain)) {
-      blacklistBtn.textContent = "✗ Blacklisted";
-      blacklistBtn.style.opacity = "0.6";
+      blacklistBtn.textContent = "✗ BLACKLISTED";
+      blacklistBtn.style.opacity = "1";
+      blacklistBtn.style.fontWeight = "bold";
+      blacklistBtn.style.backgroundColor = "#ef4444"; // Bright red
+      blacklistBtn.style.color = "white";
+      blacklistBtn.style.borderColor = "#dc2626";
+      blacklistBtn.style.boxShadow = "0 0 8px rgba(239, 68, 68, 0.4)";
     } else {
       blacklistBtn.textContent = "✗ Blacklist";
       blacklistBtn.style.opacity = "1";
+      blacklistBtn.style.fontWeight = "normal";
+      blacklistBtn.style.backgroundColor = "#fee2e2";
+      blacklistBtn.style.color = "#991b1b";
+      blacklistBtn.style.borderColor = "#fca5a5";
+      blacklistBtn.style.boxShadow = "none";
     }
   });
 }
@@ -100,8 +120,24 @@ toggleBtn.addEventListener("click", () => {
   chrome.storage.local.get({ enabled: true }, ({ enabled }) => {
     const next = !enabled;
     chrome.storage.local.set({ enabled: next }, () => {
+      // Immediately send message to content script to disable/enable
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]?.id) {
+          if (!next) {
+            // Disabling - send explicit OFF command, NO reload
+            chrome.tabs.sendMessage(tabs[0].id, { action: 'toggleOff' }).catch(() => {
+              // If messaging fails, still don't reload - just show disabled
+            });
+          } else {
+            // Enabling - send refresh command then reload
+            chrome.tabs.sendMessage(tabs[0].id, { action: 'refresh' }).catch(() => {
+              chrome.tabs.reload(tabs[0].id);
+            });
+            reloadTab();
+          }
+        }
+      });
       updateUI();
-      reloadTab();
     });
   });
 });
