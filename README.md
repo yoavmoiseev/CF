@@ -11,13 +11,13 @@ Automatically grades websites 1-10 based on content analysis. Blocks (grade 1-3)
 | Grade | Category | Action |
 |-------|----------|--------|
 | 1-3 | 🔴 Adult/Dangerous/Violence | **BLOCKED** (hidden) |
-| 4 | 🟠 High media (E-commerce, sales) | Heavy blur (35px, 0.3 brightness) |
-| 5 | 🟡 Finance, Medical | Heavy blur |
+| 4 | 🟠 News, Video sites, High media | Heavy blur (40px, 0.05 brightness) |
+| 5 | 🟡 Finance, Medical, E-commerce | Heavy blur |
 | 6 | 🟡 Educational content | Heavy blur |
-| 7 | 🟢 Technical, Programming | Light blur (15px, 0.5 brightness) |
-| 8 | 🟢 News, Mixed content | Light blur |
-| 9 | 🟢 Quality content, Low media | Light blur |
-| 10 | 💚 Text-only (News sites, spiritual) | No blur |
+| 7 | 🟢 Technical, Programming | Medium blur (25px, 0.2 brightness) |
+| 8 | 🟢 Religious content with media/video | Light blur (15px, 0.4 brightness) |
+| 9 | 🟢 Religious content, low media | Light blur |
+| 10 | 📚 Jewish religious text-only | No blur |
 
 ---
 

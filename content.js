@@ -30,6 +30,8 @@
     isWhitelisted: false,
     isBlacklisted: false,
     blurMode: 'light', // 'none', 'light', 'heavy', 'block'
+    adsBlocked: true,
+    popupsBlocked: true,
   };
 
   // Global flag to stop ALL processing
@@ -201,51 +203,58 @@
 
     traverse(document);
   }
-  // ── Click capture: block link navigation while element is blurred ───────────
-  // Prevents <a> parent links from firing when user single-clicks a blurred element.
-  // After dblclick reveals the element (revealed.add(el)), clicks pass through normally.
-  function onClickCapture(e) {
-    const el = e.currentTarget;
-    if (shouldProcess && !revealed.has(el)) {
+  // ── Document-level click handler (capture phase) ─────────────────────────
+  // Works across shadow roots via e.composedPath().
+  // Single click on blurred media: block link navigation.
+  // Double-click (two clicks < 350ms) on blurred: reveal.
+  // Double-click on revealed: re-blur.
+  let _lastClickEl = null;
+  let _lastClickTime = 0;
+
+  function onDocumentClick(e) {
+    if (!shouldProcess) return;
+    const path = e.composedPath ? e.composedPath() : (e.path || []);
+    const mediaEl = path.find(el => el && el.nodeType === 1 && blurred.has(el));
+    if (!mediaEl) return;
+
+    const now = Date.now();
+    const isDbl = (_lastClickEl === mediaEl && now - _lastClickTime < 350);
+    _lastClickEl = mediaEl;
+    _lastClickTime = now;
+
+    if (revealed.has(mediaEl)) {
+      if (isDbl) {
+        // Double-click on revealed → re-blur
+        revealed.delete(mediaEl);
+        mediaEl.style.removeProperty('filter');
+        mediaEl.style.removeProperty('visibility');
+        mediaEl.style.removeProperty('cursor');
+        if (shadowBlurred.has(mediaEl)) {
+          const blurVal = getBlurForGrade(currentSettings.grade);
+          if (blurVal) mediaEl.style.setProperty('filter', blurVal, 'important');
+        }
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+      // Single click on revealed → allow navigation (do nothing)
+    } else {
+      // Blurred: always block navigation
       e.preventDefault();
       e.stopImmediatePropagation();
-    }
-  }
-
-  // ── Double-click reveal ─────────────────────────────────────────────────────
-  // CSS handles all visual blur via html[data-cf-grade] attribute on <html>.
-  // JS only handles user-initiated reveal / re-blur via double-click.
-  function onDblClick(e) {
-    const el = e.currentTarget;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-
-    if (currentSettings.isBlacklisted || currentSettings.grade <= 3) return;
-
-    if (revealed.has(el)) {
-      // Re-blur: remove inline override so CSS grade rule takes over again
-      revealed.delete(el);
-      el.style.removeProperty("filter");
-      el.style.removeProperty("visibility");
-      el.style.removeProperty("cursor");
-      // Shadow DOM: CSS can't reapply blur after removing inline override — do it inline
-      if (shadowBlurred.has(el)) {
-        const blurVal = getBlurForGrade(currentSettings.grade);
-        if (blurVal) el.style.setProperty("filter", blurVal, "important");
+      if (isDbl) {
+        // Double-click on blurred → reveal
+        if (currentSettings.isBlacklisted || currentSettings.grade <= 3) return;
+        revealed.add(mediaEl);
+        mediaEl.style.setProperty('filter', 'none', 'important');
+        mediaEl.style.setProperty('visibility', 'visible', 'important');
+        mediaEl.style.setProperty('cursor', 'pointer', 'important');
       }
-    } else {
-      // Reveal: override CSS blur with inline filter:none
-      revealed.add(el);
-      el.style.setProperty("filter", "none", "important");
-      el.style.setProperty("visibility", "visible", "important");
-      el.style.setProperty("cursor", "pointer", "important");
     }
   }
 
   // ── Register dblclick listeners on new media elements ──────────────────────
-  // CSS handles all visual blur via html[data-cf-grade] on <html>.
-  // JS only attaches dblclick listeners for user-initiated reveal.
-  // NO inline style mutations here — avoids triggering Angular change detection loops.
+  // Only tracks elements in blurred set for composedPath lookup.
+  // Click handling is done by document-level onDocumentClick listener.
   function processAll() {
     if (!shouldProcess) return;
     if (document.documentElement.hasAttribute(OFF_ATTR)) return;
@@ -259,13 +268,11 @@
       if (listened.has(el)) return;
       listened.add(el);
       blurred.add(el);
-      el.addEventListener("click", onClickCapture, true);
-      el.addEventListener("dblclick", onDblClick, true);
       // Shadow DOM elements: extension CSS can't cross shadow root boundaries — apply inline filter
       if (el.getRootNode() !== document) {
         shadowBlurred.add(el);
         const blurVal = getBlurForGrade(currentSettings.grade);
-        if (blurVal) el.style.setProperty("filter", blurVal, "important");
+        if (blurVal) el.style.setProperty('filter', blurVal, 'important');
       }
     });
   }
@@ -286,6 +293,9 @@
     } else {
       document.documentElement.setAttribute(GRADE_ATTR, currentSettings.grade);
     }
+
+    // Apply ad/popup blocker attributes
+    applyBlockerAttributes();
     
     // Debug log
     console.log('Content Filter - Applied grade:', {
@@ -294,6 +304,19 @@
       whitelisted: currentSettings.isWhitelisted,
       enabled: currentSettings.enabled
     });
+  }
+
+  function applyBlockerAttributes() {
+    if (currentSettings.adsBlocked && !currentSettings.isWhitelisted) {
+      document.documentElement.setAttribute('data-cf-ads-blocked', '1');
+    } else {
+      document.documentElement.removeAttribute('data-cf-ads-blocked');
+    }
+    if (currentSettings.popupsBlocked && !currentSettings.isWhitelisted) {
+      document.documentElement.setAttribute('data-cf-popups-blocked', '1');
+    } else {
+      document.documentElement.removeAttribute('data-cf-popups-blocked');
+    }
   }
 
   function enable() {
@@ -329,6 +352,10 @@
     console.log('[CF] ENABLE called - starting processing. Grade:', currentSettings.grade);
     
     if (!observer) {
+      // Document-level click handler: composedPath works across shadow roots.
+      // Attached once here, removed in disable().
+      document.addEventListener('click', onDocumentClick, true);
+
       observer = new MutationObserver((mutations) => {
         // If new DOM nodes were added, immediately inject blur CSS into any new shadow roots.
         // This prevents carousel/hero flash: new shadow roots are blurred before browser paints.
@@ -363,6 +390,7 @@
   function disable() {
     // Stop all active processing with master switch FIRST
     shouldProcess = false;
+    document.removeEventListener('click', onDocumentClick, true);
     
     // IMMEDIATELY disconnect observer BEFORE doing anything else
     if (observer) { 
@@ -537,19 +565,17 @@
       if (findings.hasAdultIndicators) return 1;
       if (findings.hasViolenceIndicators) return 2;
       if (findings.adultKeywords.length > 3) return 2;
-      if (findings.mediaCount > 50 || findings.adCount > 20) return 4;
-      if (findings.mediaCount > 30 || findings.adCount > 15) return 4;
-      if (findings.hasFinanceKeywords) return 5;
-      if (findings.hasMedicalKeywords) return 5;
-      if (findings.hasEducationKeywords) return (findings.mediaCount > 20) ? 6 : 7;
-      if (findings.hasTechKeywords) return (findings.mediaCount > 15) ? 7 : 8;
-      if (findings.hasNewsKeywords) return (findings.mediaCount > 25) ? 8 : 9;
-      if (findings.mediaCount > 50) return 4;
-      if (findings.mediaCount > 30) return 5;
+      if (findings.hasNewsKeywords && findings.mediaCount > 5) return 4;
+      if (findings.mediaCount > 40 || findings.adCount > 15) return 4;
+      if (findings.hasFinanceKeywords || findings.hasMedicalKeywords) return 5;
+      if (findings.mediaCount > 20 && findings.adCount > 5) return 5;
+      if (findings.hasEducationKeywords) return 6;
+      if (findings.hasTechKeywords) return 7;
       if (findings.mediaCount > 15) return 6;
       if (findings.mediaCount > 5) return 7;
       if (findings.textLength > 2000 && findings.mediaCount < 3) return 10;
       if (findings.textLength > 1000 && findings.mediaCount < 5) return 9;
+      if (findings.mediaCount < 8) return 8;
       return 6;
     },
   };
@@ -637,6 +663,18 @@
       sendResponse({ success: true });
     }
     
+    if (request.action === 'toggleAds') {
+      currentSettings.adsBlocked = request.adsBlocked;
+      applyBlockerAttributes();
+      sendResponse({ success: true });
+    }
+
+    if (request.action === 'togglePopups') {
+      currentSettings.popupsBlocked = request.popupsBlocked;
+      applyBlockerAttributes();
+      sendResponse({ success: true });
+    }
+
     if (request.action === 'refresh') {
       // Refresh filter settings
       initializeFilter();
@@ -660,12 +698,14 @@
     
     console.log('[CF] Initializing for domain:', domain);
 
-    chrome.storage.local.get(['enabled', 'siteGrades', 'whitelist', 'blacklist'], (result) => {
+    chrome.storage.local.get(['enabled', 'siteGrades', 'whitelist', 'blacklist', 'adsBlocked', 'popupsBlocked'], (result) => {
       const enabled = result.enabled !== false;
       const siteGrades = result.siteGrades || {};
       const whitelist = (result.whitelist || []).map(d => d.toLowerCase());
       const blacklist = (result.blacklist || []).map(d => d.toLowerCase());
       const domainLower = domain.toLowerCase();
+      currentSettings.adsBlocked = result.adsBlocked !== false;
+      currentSettings.popupsBlocked = result.popupsBlocked !== false;
 
       console.log('[CF] Storage check:', { enabled, hasWhitelist: whitelist.length, hasBlacklist: blacklist.length });
 

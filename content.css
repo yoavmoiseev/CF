@@ -230,6 +230,57 @@ html[data-cf-grade="10"] * {
 }
 
 /* ============================================================================
+   AD BLOCKER
+   html[data-cf-ads-blocked] hides common ad containers.
+   Does NOT affect whitelisted sites (shouldProcess=false, attribute never set).
+   ============================================================================ */
+
+html[data-cf-ads-blocked] [class*="adsbygoogle"],
+html[data-cf-ads-blocked] ins[class*="adsbygoogle"],
+html[data-cf-ads-blocked] [id*="-ad-"],
+html[data-cf-ads-blocked] [class*="-ad-"],
+html[data-cf-ads-blocked] [class*="advertisement"],
+html[data-cf-ads-blocked] [class*="banner-ad"],
+html[data-cf-ads-blocked] [class*="ad-banner"],
+html[data-cf-ads-blocked] [class*="ad-container"],
+html[data-cf-ads-blocked] [class*="ad-wrapper"],
+html[data-cf-ads-blocked] [id*="google_ads"],
+html[data-cf-ads-blocked] iframe[src*="doubleclick"],
+html[data-cf-ads-blocked] iframe[src*="googlesyndication"],
+html[data-cf-ads-blocked] iframe[src*="googleadservices"],
+html[data-cf-ads-blocked] iframe[src*="adnxs"],
+html[data-cf-ads-blocked] iframe[src*="outbrain"],
+html[data-cf-ads-blocked] iframe[src*="taboola"] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  height: 0 !important;
+  overflow: hidden !important;
+}
+
+/* ============================================================================
+   POPUP BLOCKER
+   html[data-cf-popups-blocked] hides modal/overlay elements.
+   ============================================================================ */
+
+html[data-cf-popups-blocked] [class*="cookie-banner"],
+html[data-cf-popups-blocked] [class*="cookie-notice"],
+html[data-cf-popups-blocked] [id*="cookie-banner"],
+html[data-cf-popups-blocked] [id*="cookie-notice"],
+html[data-cf-popups-blocked] [class*="consent"],
+html[data-cf-popups-blocked] [id*="consent"],
+html[data-cf-popups-blocked] [class*="newsletter-popup"],
+html[data-cf-popups-blocked] [class*="subscribe-popup"],
+html[data-cf-popups-blocked] [class*="promo-popup"],
+html[data-cf-popups-blocked] [class*="modal-overlay"],
+html[data-cf-popups-blocked] [class*="overlay--visible"],
+html[data-cf-popups-blocked] [class*="paywall"] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* ============================================================================
    CDK / TOOLTIP EXCLUSIONS
    MUST be at the END of this file. The blur rule specificity is (0,3,2).
    These rules have specificity (0,4,2) so they correctly win.

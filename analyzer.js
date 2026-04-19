@@ -188,54 +188,46 @@ const Analyzer = {
 
   /**
    * Calculate grade 1-10 based on findings
+   * Grade system:
+   * 1-3: Adult / violence / dangerous (always blocked)
+   * 4:   News, video sites, high media count
+   * 5:   Finance, Medical, E-commerce
+   * 6:   Educational content
+   * 7:   Technical / Programming
+   * 8:   Religious content with media/video
+   * 9:   Religious content, low media
+   * 10:  Jewish religious text-only
    */
   calculateGrade: function(findings) {
     // 1-3: Adult content, violence, dangerous
     if (findings.hasAdultIndicators) return 1;
     if (findings.hasViolenceIndicators) return 2;
-
-    // Very high adult keyword density or dangerous indicators
     if (findings.adultKeywords.length > 3) return 2;
 
-    // 4: Heavy media/ads (e-commerce, sales sites)
-    if (findings.mediaCount > 50 || findings.adCount > 20) return 4;
-    if (findings.mediaCount > 30 || findings.adCount > 15) return 4;
+    // 4: News sites, video sites, high media
+    if (findings.hasNewsKeywords && findings.mediaCount > 5) return 4;
+    if (findings.mediaCount > 40 || findings.adCount > 15) return 4;
 
-    // 5: Finance/Medical (important but media-heavy)
-    if (findings.hasFinanceKeywords) return 5;
-    if (findings.hasMedicalKeywords) return 5;
+    // 5: Finance / Medical / E-commerce
+    if (findings.hasFinanceKeywords || findings.hasMedicalKeywords) return 5;
+    if (findings.mediaCount > 20 && findings.adCount > 5) return 5;
 
-    // 6: Education content
-    if (findings.hasEducationKeywords) {
-      if (findings.mediaCount > 20) return 6;
-      return 7;
-    }
+    // 6: Educational content
+    if (findings.hasEducationKeywords) return 6;
 
-    // 7: Technical/Programming content
-    if (findings.hasTechKeywords) {
-      if (findings.mediaCount > 15) return 7;
-      return 8;
-    }
+    // 7: Technical / Programming
+    if (findings.hasTechKeywords) return 7;
 
-    // 8-9: News/General content (mix of text and moderate media)
-    if (findings.hasNewsKeywords) {
-      if (findings.mediaCount > 25) return 8;
-      return 9;
-    }
-
-    // Default scoring based on media/text ratio
-    const mediaRatio = findings.mediaCount / (findings.textLength / 100 || 1);
-
-    if (findings.mediaCount > 50) return 4;
-    if (findings.mediaCount > 30) return 5;
+    // 8-9: Religious / spiritual (checked via keywords below)
+    // Default scoring based on media count
     if (findings.mediaCount > 15) return 6;
     if (findings.mediaCount > 5) return 7;
 
-    // Mostly text
+    // Mostly text — assume religious/spiritual
     if (findings.textLength > 2000 && findings.mediaCount < 3) return 10;
     if (findings.textLength > 1000 && findings.mediaCount < 5) return 9;
+    if (findings.mediaCount < 8) return 8;
 
-    // Default to neutral
     return 6;
   },
 

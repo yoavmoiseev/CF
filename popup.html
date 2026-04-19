@@ -272,11 +272,68 @@
     #cancelFeedback:hover {
       background-color: #d1d5db;
     }
+
+    /* Language Switcher */
+    .lang-switcher {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+      justify-content: flex-end;
+    }
+    .lang-btn {
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid #d1d5db;
+      border-radius: 5px;
+      background: #f3f4f6;
+      color: #555;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .lang-btn.active {
+      background: #667eea;
+      color: white;
+      border-color: #667eea;
+    }
+
+    /* Blocker checkboxes */
+    .blockers {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+      background: #f0fdf4;
+      border: 1px solid #86efac;
+      border-radius: 8px;
+      padding: 8px 12px;
+    }
+    .blocker-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: #15803d;
+      cursor: pointer;
+      user-select: none;
+      flex: 1;
+    }
+    .blocker-item input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: #10b981;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>Content Filter</h2>
+    <div class="lang-switcher">
+      <button class="lang-btn active" data-lang="he">עב</button>
+      <button class="lang-btn" data-lang="ru">РУС</button>
+      <button class="lang-btn" data-lang="en">ENG</button>
+    </div>
+
+    <h2 data-i18n="title">Content Filter</h2>
     
     <div class="status-box">
       <div id="status">Status: ...</div>
@@ -287,36 +344,47 @@
     <div class="findings" id="findings"></div>
 
     <div class="controls">
-      <button id="toggle">Toggle Filter</button>
-      <button id="analyze">Analyze Page</button>
-      <button id="feedback">Give Feedback</button>
+      <button id="toggle" data-i18n="toggle">Toggle Filter</button>
+      <button id="analyze" data-i18n="analyze">Analyze Page</button>
+      <button id="feedback" data-i18n="feedback">Give Feedback</button>
     </div>
 
     <div class="grade-override">
-      <label>Override Grade (1-10):</label>
+      <label data-i18n="gradeOverride">Override Grade (1-10):</label>
       <div class="grade-slides">
         <input type="range" id="gradeSlider" min="1" max="10" value="6" />
         <span id="gradeValue">6</span>
       </div>
     </div>
 
+    <div class="blockers">
+      <label class="blocker-item">
+        <input type="checkbox" id="adsBlockedCheck" checked />
+        <span data-i18n="blockAds">Block Ads</span>
+      </label>
+      <label class="blocker-item">
+        <input type="checkbox" id="popupsBlockedCheck" checked />
+        <span data-i18n="blockPopups">Block Pop-ups</span>
+      </label>
+    </div>
+
     <div class="list-controls">
-      <button id="whitelist">✓ Whitelist</button>
-      <button id="blacklist">✗ Blacklist</button>
+      <button id="whitelist" data-i18n="whitelist">✓ Whitelist</button>
+      <button id="blacklist" data-i18n="blacklist">✗ Blacklist</button>
     </div>
   </div>
 
   <!-- Feedback Modal -->
   <div id="feedbackModal">
     <div class="modal-content">
-      <h3>Send Feedback</h3>
-      <p style="font-size: 12px; color: #666; margin-bottom: 12px;">
+      <h3 data-i18n="feedbackTitle">Send Feedback</h3>
+      <p style="font-size: 12px; color: #666; margin-bottom: 12px;" data-i18n="feedbackDesc">
         Help improve the grading system. What's wrong with the current grade?
       </p>
-      <textarea id="feedbackText" placeholder="This site is actually... "></textarea>
+      <textarea id="feedbackText" data-i18n-placeholder="feedbackPlaceholder" placeholder="This site is actually... "></textarea>
       <div class="modal-controls">
-        <button id="submitFeedback">Submit</button>
-        <button id="cancelFeedback">Cancel</button>
+        <button id="submitFeedback" data-i18n="submit">Submit</button>
+        <button id="cancelFeedback" data-i18n="cancel">Cancel</button>
       </div>
     </div>
   </div>
