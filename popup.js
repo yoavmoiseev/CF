@@ -12,6 +12,43 @@ const blacklistBtn = document.getElementById("blacklist");
 const adsBlockedCheck = document.getElementById("adsBlockedCheck");
 const popupsBlockedCheck = document.getElementById("popupsBlockedCheck");
 
+// ── Logo video square ─────────────────────────────────────────────────────────
+(function initLogoVideo() {
+  const container  = document.getElementById('logoContainer');
+  const video      = document.getElementById('logoVideo');
+  const yamLink    = document.getElementById('logoYamLink');
+
+  const sources = [
+    chrome.runtime.getURL('video/he.mp4'),
+    chrome.runtime.getURL('video/en.mp4'),
+  ];
+  let idx = 0;
+
+  function loadNext() {
+    idx = (idx + 1) % sources.length;
+    video.src = sources[idx];
+    video.load();
+    video.play().catch(() => {});
+  }
+
+  video.addEventListener('ended', loadNext);
+  video.addEventListener('error', () => setTimeout(loadNext, 500));
+  video.src = sources[0];
+  video.play().catch(() => {});
+
+  // Double-click: toggle expanded state
+  container.addEventListener('dblclick', () => {
+    container.classList.toggle('expanded');
+  });
+
+  // Prevent the link click from collapsing the container
+  yamLink.addEventListener('click', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    chrome.tabs.create({ url: 'https://yamsoft.org' });
+  });
+})();
+
 // ── i18n ─────────────────────────────────────────────────────────────────────
 const STRINGS = {
   he: {
@@ -204,18 +241,45 @@ function updateUI() {
 
 function getGradeDescription(grade) {
   const descriptions = {
-    1: '🔴 Adult content (BLOCKED)',
-    2: '🔴 Dangerous content (BLOCKED)',
-    3: '🔴 Restricted content (BLOCKED)',
-    4: '🟠 News / Video / High media',
-    5: '🟡 Finance / Medical / Shopping',
-    6: '🟡 Educational content',
-    7: '🟢 Technical / Programming',
-    8: '🟢 Religious with media',
-    9: '🟢 Religious, low media',
-    10: '📚 Jewish text-only (No blur)',
+    he: {
+      1: '🔴 תוכן למבוגרים (חסום)',
+      2: '🔴 תוכן מסוכן (חסום)',
+      3: '🔴 תוכן מוגבל (חסום)',
+      4: '🟠 חדשות / וידאו / מדיה רבה',
+      5: '🟡 פיננסים / רפואה / קניות',
+      6: '🟡 תוכן חינוכי',
+      7: '🟢 טכני / תכנות',
+      8: '🟢 דתי עם מדיה',
+      9: '🟢 דתי, מדיה מועטה',
+      10: '📚 טקסט יהודי בלבד (ללא טשטוש)',
+    },
+    ru: {
+      1: '🔴 Контент для взрослых (ЗАБЛОК.)',
+      2: '🔴 Опасный контент (ЗАБЛОК.)',
+      3: '🔴 Ограниченный контент (ЗАБЛОК.)',
+      4: '🟠 Новости / Видео / Много медиа',
+      5: '🟡 Финансы / Медицина / Шопинг',
+      6: '🟡 Образовательный контент',
+      7: '🟢 Технический / Программирование',
+      8: '🟢 Религиозный с медиа',
+      9: '🟢 Религиозный, мало медиа',
+      10: '📚 Только еврейский текст (без блюра)',
+    },
+    en: {
+      1: '🔴 Adult content (BLOCKED)',
+      2: '🔴 Dangerous content (BLOCKED)',
+      3: '🔴 Restricted content (BLOCKED)',
+      4: '🟠 News / Video / High media',
+      5: '🟡 Finance / Medical / Shopping',
+      6: '🟡 Educational content',
+      7: '🟢 Technical / Programming',
+      8: '🟢 Religious with media',
+      9: '🟢 Religious, low media',
+      10: '📚 Jewish text-only (No blur)',
+    },
   };
-  return descriptions[grade] || 'Unknown';
+  const lang = currentLang || 'he';
+  return (descriptions[lang] || descriptions.en)[grade] || (descriptions.en[grade] || 'Unknown');
 }
 
 // Toggle filter on/off

@@ -3,10 +3,19 @@
   "name": "Content Filter",
   "version": "2.0",
   "description": "Grade-based content filtering with AI learning. Blocks/blurs content 1-10.",
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_title": "Content Filter"
   },
+  "web_accessible_resources": [
+    {
+      "resources": ["video/he.mp4", "video/en.mp4"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
@@ -16,6 +25,6 @@
       "all_frames": true
     }
   ],
-  "permissions": ["storage", "tabs", "webRequest"],
+  "permissions": ["storage", "tabs", "webRequest", "offscreen"],
   "host_permissions": ["<all_urls>"]
 }
