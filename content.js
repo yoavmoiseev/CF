@@ -34,6 +34,13 @@
     popupsBlocked: true,
   };
 
+  // Seconds until full unblur on hover (configurable from popup)
+  let unblurSeconds = 6;
+  chrome.storage.local.get({ unblurSeconds: 6 }, (r) => { unblurSeconds = r.unblurSeconds; });
+
+  // Map of el → { timer, currentBlur, targetBlur, interval }
+  const hoverState = new Map();
+
   // Global flag to stop ALL processing
   let shouldProcess = true;
 
@@ -125,6 +132,96 @@
     if (grade <= 7) return "blur(25px) brightness(0.2)";
     if (grade <= 9) return "blur(15px) brightness(0.4)";
     return null;
+  }
+
+  // Return the numeric blur px for the current grade (used by hover animation)
+  function getBlurPxForGrade(grade) {
+    if (grade <= 5) return 40;
+    if (grade <= 7) return 25;
+    if (grade <= 9) return 15;
+    return 0;
+  }
+
+  // Log element details to console when fully unblurred (for debugging)
+  function logUnblurredElement(el) {
+    try {
+      const rect = el.getBoundingClientRect();
+      const attrs = {};
+      for (const a of el.attributes) attrs[a.name] = a.value;
+      console.groupCollapsed('[CF] ✅ Full unblur reached — element details');
+      console.log('Tag:', el.tagName.toLowerCase());
+      console.log('Attributes:', attrs);
+      console.log('src / currentSrc:', el.src || el.currentSrc || attrs.src || '(none)');
+      console.log('Size:', Math.round(rect.width) + 'x' + Math.round(rect.height));
+      console.log('Position (viewport):', { top: Math.round(rect.top), left: Math.round(rect.left) });
+      console.log('Parent:', el.parentElement ? el.parentElement.tagName.toLowerCase() + (el.parentElement.className ? '.' + el.parentElement.className.split(' ').join('.') : '') : '(none)');
+      console.log('outerHTML (first 300 chars):', el.outerHTML.slice(0, 300));
+      console.log('Element ref:', el);
+      console.groupEnd();
+    } catch (e) { /* ignore */ }
+  }
+
+  // Start gradual unblur on mouseenter, restore immediately on mouseleave
+  function attachHoverUnblur(el) {
+    if (el._cfHoverAttached) return;
+    el._cfHoverAttached = true;
+
+    el.addEventListener('mouseenter', () => {
+      if (!shouldProcess) return;
+      if (revealed.has(el)) return; // already fully revealed by dblclick
+      if (currentSettings.isBlacklisted || currentSettings.grade <= 3) return;
+
+      const maxBlur = getBlurPxForGrade(currentSettings.grade);
+      if (!maxBlur) return; // grade 10 — no blur
+
+      // Clear any existing interval for this element
+      const prev = hoverState.get(el);
+      if (prev && prev.interval) clearInterval(prev.interval);
+
+      const steps = unblurSeconds; // one step per second
+      const blurStep = maxBlur / steps;
+      let currentBlur = maxBlur;
+      let fullyUnblurred = false;
+
+      const interval = setInterval(() => {
+        if (!shouldProcess || revealed.has(el)) {
+          clearInterval(interval);
+          hoverState.delete(el);
+          return;
+        }
+        currentBlur = Math.max(0, currentBlur - blurStep);
+        const brightnessVal = currentSettings.grade <= 5 ? 0.05 + (1 - 0.05) * (1 - currentBlur / maxBlur)
+                            : currentSettings.grade <= 7 ? 0.2  + (1 - 0.2)  * (1 - currentBlur / maxBlur)
+                            :                              0.4  + (1 - 0.4)  * (1 - currentBlur / maxBlur);
+        const filterStr = currentBlur > 0
+          ? `blur(${currentBlur.toFixed(1)}px) brightness(${brightnessVal.toFixed(2)})`
+          : 'none';
+        el.style.setProperty('filter', filterStr, 'important');
+
+        if (currentBlur <= 0 && !fullyUnblurred) {
+          fullyUnblurred = true;
+          clearInterval(interval);
+          hoverState.delete(el);
+          logUnblurredElement(el);
+        }
+      }, 1000);
+
+      hoverState.set(el, { interval, maxBlur });
+    });
+
+    el.addEventListener('mouseleave', () => {
+      const state = hoverState.get(el);
+      if (state && state.interval) {
+        clearInterval(state.interval);
+        hoverState.delete(el);
+      }
+      if (revealed.has(el)) return; // dblclick revealed — don't re-blur
+      // Immediately restore full blur
+      const blurVal = getBlurForGrade(currentSettings.grade);
+      if (blurVal) {
+        el.style.setProperty('filter', blurVal, 'important');
+      }
+    });
   }
 
   // Removes inline filter from all shadow DOM elements and removes injected style tags
@@ -268,6 +365,8 @@
       if (listened.has(el)) return;
       listened.add(el);
       blurred.add(el);
+      // Hover unblur listener (gradual reveal on mouseenter, instant re-blur on mouseleave)
+      attachHoverUnblur(el);
       // Shadow DOM elements: extension CSS can't cross shadow root boundaries — apply inline filter
       if (el.getRootNode() !== document) {
         shadowBlurred.add(el);
@@ -690,6 +789,11 @@
       console.log('[CF] OFF attribute set:', document.documentElement.hasAttribute(OFF_ATTR));
       sendResponse({ success: true });
     }
+
+    if (request.action === 'setUnblurSeconds') {
+      unblurSeconds = request.seconds;
+      sendResponse({ success: true });
+    }
   });
 
   // ── Initialize on load ─────────────────────────────────────────────────────
@@ -777,6 +881,10 @@
     if ("siteGrades" in changes || "whitelist" in changes || "blacklist" in changes) {
       // Re-evaluate settings for this site
       initializeFilter();
+    }
+
+    if ("unblurSeconds" in changes) {
+      unblurSeconds = changes.unblurSeconds.newValue;
     }
   });
 

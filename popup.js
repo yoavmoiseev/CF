@@ -11,6 +11,8 @@ const whitelistBtn = document.getElementById("whitelist");
 const blacklistBtn = document.getElementById("blacklist");
 const adsBlockedCheck = document.getElementById("adsBlockedCheck");
 const popupsBlockedCheck = document.getElementById("popupsBlockedCheck");
+const unblurSlider = document.getElementById("unblurSlider");
+const unblurValueEl = document.getElementById("unblurValue");
 
 // ── Logo video square ─────────────────────────────────────────────────────────
 (function initLogoVideo() {
@@ -69,6 +71,7 @@ const STRINGS = {
     statusOn: 'סטטוס: פעיל',
     statusOff: 'סטטוס: כבוי',
     grade: 'דירוג',
+    unblurLabel: 'שניות לביטול טשטוש בריחוף:',
   },
   ru: {
     title: 'Фильтр контента',
@@ -88,6 +91,7 @@ const STRINGS = {
     statusOn: 'Статус: ВКЛ',
     statusOff: 'Статус: ВЫКЛ',
     grade: 'Оценка',
+    unblurLabel: 'Секунд до снятия блюра при наведении:',
   },
   en: {
     title: 'Content Filter',
@@ -107,6 +111,7 @@ const STRINGS = {
     statusOn: 'Status: ON',
     statusOff: 'Status: OFF',
     grade: 'Grade',
+    unblurLabel: 'Seconds to unblur on hover:',
   },
 };
 
@@ -541,6 +546,25 @@ popupsBlockedCheck.addEventListener('change', () => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]?.id) {
         chrome.tabs.sendMessage(tabs[0].id, { action: 'togglePopups', popupsBlocked: val }).catch(() => {});
+      }
+    });
+  });
+});
+
+// Unblur seconds slider
+chrome.storage.local.get({ unblurSeconds: 6 }, ({ unblurSeconds }) => {
+  unblurSlider.value = unblurSeconds;
+  unblurValueEl.textContent = unblurSeconds;
+});
+
+unblurSlider.addEventListener('input', () => {
+  const val = parseInt(unblurSlider.value);
+  unblurValueEl.textContent = val;
+  chrome.storage.local.set({ unblurSeconds: val }, () => {
+    // Notify all content scripts of the new value
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs[0]?.id) {
+        chrome.tabs.sendMessage(tabs[0].id, { action: 'setUnblurSeconds', seconds: val }).catch(() => {});
       }
     });
   });

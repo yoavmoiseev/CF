@@ -351,6 +351,52 @@
       text-decoration: underline;
     }
 
+    /* Unblur seconds control */
+    .unblur-control {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+    }
+    .unblur-control label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 7px;
+      color: #1e40af;
+    }
+    .unblur-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #unblurSlider {
+      flex: 1;
+      height: 6px;
+      border-radius: 3px;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      background: linear-gradient(to right, #3b82f6, #06b6d4);
+    }
+    #unblurSlider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: white;
+      border: 3px solid #3b82f6;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+    #unblurValue {
+      font-weight: bold;
+      color: #2563eb;
+      min-width: 24px;
+      text-align: center;
+    }
+
     /* Blocker checkboxes */
     .blockers {
       display: flex;
@@ -418,6 +464,14 @@
       <div class="grade-slides">
         <input type="range" id="gradeSlider" min="1" max="10" value="6" />
         <span id="gradeValue">6</span>
+      </div>
+    </div>
+
+    <div class="unblur-control">
+      <label data-i18n="unblurLabel">שניות לביטול טשטוש בריחוף:</label>
+      <div class="unblur-row">
+        <input type="range" id="unblurSlider" min="1" max="20" value="6" />
+        <span id="unblurValue">6</span>
       </div>
     </div>
 
