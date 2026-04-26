@@ -4,15 +4,13 @@ const gradeDescriptionEl = document.getElementById("gradeDescription");
 const findingsEl = document.getElementById("findings");
 const toggleBtn = document.getElementById("toggle");
 const analyzeBtn = document.getElementById("analyze");
-const feedbackBtn = document.getElementById("feedback");
+const helpBtn = document.getElementById("helpBtn");
 const gradeSlider = document.getElementById("gradeSlider");
 const gradeValue = document.getElementById("gradeValue");
 const whitelistBtn = document.getElementById("whitelist");
 const blacklistBtn = document.getElementById("blacklist");
 const adsBlockedCheck = document.getElementById("adsBlockedCheck");
 const popupsBlockedCheck = document.getElementById("popupsBlockedCheck");
-const unblurSlider = document.getElementById("unblurSlider");
-const unblurValueEl = document.getElementById("unblurValue");
 
 // ── Logo video square ─────────────────────────────────────────────────────────
 (function initLogoVideo() {
@@ -57,61 +55,76 @@ const STRINGS = {
     title: 'סינון תוכן',
     toggle: 'הפעל / כבה',
     analyze: 'נתח דף',
-    feedback: 'משוב',
+    help: '❓ עזרה',
     gradeOverride: 'עקוף דירוג (1-10):',
     blockAds: '🚫 חסום פרסומות',
     blockPopups: '🚫 חסום חלונות',
     whitelist: '✓ רשימה לבנה',
     blacklist: '✗ רשימה שחורה',
-    feedbackTitle: 'שלח משוב',
-    feedbackDesc: 'עזור לשפר את מערכת הדירוג. מה לא נכון בדירוג הנוכחי?',
-    feedbackPlaceholder: 'האתר הזה הוא...',
-    submit: 'שלח',
     cancel: 'בטל',
     statusOn: 'סטטוס: פעיל',
     statusOff: 'סטטוס: כבוי',
     grade: 'דירוג',
-    unblurLabel: 'שניות לביטול טשטוש בריחוף:',
+    helpTitle: 'כיצד להשתמש',
+    helpClose: 'סגור',
+    helpItems: [
+      { icon: '🔢', title: 'דירוג אתר (1–10)', desc: 'הסרגל קובע כמה התוכן מסונן. 1–3 חוסם לחלוטין, 4–7 מטשטש תמונות, 8–10 ללא טשטוש.' },
+      { icon: '🖱️', title: 'ריחוף לביטול טשטוש', desc: 'הרח את העכבר על תמונה מטושטשת — היא תתגלה לאט. ריחוף שוב יטשטש אותה חזרה. התמונה נשארת במצב האחרון כשמזיזים את העכבר.' },
+      { icon: '✓ / ✗', title: 'רשימה לבנה / שחורה', desc: 'רשימה לבנה — האתר תמיד ייפתח ללא סינון. רשימה שחורה — האתר תמיד חסום.' },
+      { icon: '🚫', title: 'חסימת פרסומות וחלונות', desc: 'סמן את תיבות הסימון כדי לחסום פרסומות ו-popups על גבי הדף.' },
+      { icon: '🔍', title: 'ניתוח דף', desc: 'לחץ "נתח דף" לדירוג אוטומטי של האתר לפי תוכנו.' },
+      { icon: '⚡', title: 'הפעל / כבה', desc: 'כיבוי מסיר את כל הסינון לחלוטין עד שתפעיל מחדש.' },
+    ],
   },
   ru: {
     title: 'Фильтр контента',
     toggle: 'Вкл / Выкл',
     analyze: 'Анализ страницы',
-    feedback: 'Обратная связь',
+    help: '❓ Помощь',
     gradeOverride: 'Изменить оценку (1-10):',
     blockAds: '🚫 Блокировать рекламу',
     blockPopups: '🚫 Блокировать попапы',
     whitelist: '✓ Белый список',
     blacklist: '✗ Чёрный список',
-    feedbackTitle: 'Отправить отзыв',
-    feedbackDesc: 'Помогите улучшить систему оценки. Что не так с текущей оценкой?',
-    feedbackPlaceholder: 'Этот сайт на самом деле...',
-    submit: 'Отправить',
     cancel: 'Отмена',
     statusOn: 'Статус: ВКЛ',
     statusOff: 'Статус: ВЫКЛ',
     grade: 'Оценка',
-    unblurLabel: 'Секунд до снятия блюра при наведении:',
+    helpTitle: 'Как пользоваться',
+    helpClose: 'Закрыть',
+    helpItems: [
+      { icon: '🔢', title: 'Уровень фильтра (1–10)', desc: 'Ползунок задаёт силу фильтрации. 1–3 — полная блокировка, 4–7 — размытие, 8–10 — без размытия.' },
+      { icon: '🖱️', title: 'Наведение для снятия блюра', desc: 'Наведите мышь на размытое изображение — оно постепенно откроется. Повторное наведение снова размоет его. При уводе мыши изображение остаётся в последнем состоянии.' },
+      { icon: '✓ / ✗', title: 'Белый / Чёрный список', desc: 'Белый список — сайт всегда открывается без фильтра. Чёрный список — сайт всегда заблокирован.' },
+      { icon: '🚫', title: 'Блокировка рекламы и попапов', desc: 'Отметьте чекбоксы, чтобы скрыть рекламные баннеры и всплывающие окна.' },
+      { icon: '🔍', title: 'Анализ страницы', desc: 'Нажмите «Анализ страницы» для автоматической оценки сайта по содержимому.' },
+      { icon: '⚡', title: 'Вкл / Выкл', desc: 'Выключение полностью снимает все фильтры до следующего включения.' },
+    ],
   },
   en: {
     title: 'Content Filter',
     toggle: 'Toggle Filter',
     analyze: 'Analyze Page',
-    feedback: 'Give Feedback',
+    help: '❓ Help',
     gradeOverride: 'Override Grade (1-10):',
     blockAds: '🚫 Block Ads',
     blockPopups: '🚫 Block Pop-ups',
     whitelist: '✓ Whitelist',
     blacklist: '✗ Blacklist',
-    feedbackTitle: 'Send Feedback',
-    feedbackDesc: 'Help improve the grading system. What\'s wrong with the current grade?',
-    feedbackPlaceholder: 'This site is actually...',
-    submit: 'Submit',
     cancel: 'Cancel',
     statusOn: 'Status: ON',
     statusOff: 'Status: OFF',
     grade: 'Grade',
-    unblurLabel: 'Seconds to unblur on hover:',
+    helpTitle: 'How to Use',
+    helpClose: 'Close',
+    helpItems: [
+      { icon: '🔢', title: 'Site Grade (1–10)', desc: 'The slider controls filtering strength. 1–3 blocks entirely, 4–7 blurs images, 8–10 shows everything.' },
+      { icon: '🖱️', title: 'Hover to Unblur / Re-blur', desc: 'Hover over a blurred image to gradually reveal it. Hover again to blur it back. The image stays in its last state when you move the mouse away.' },
+      { icon: '✓ / ✗', title: 'Whitelist / Blacklist', desc: 'Whitelist — site always opens without filtering. Blacklist — site is always fully blocked.' },
+      { icon: '🚫', title: 'Block Ads & Pop-ups', desc: 'Check the boxes to hide banner ads and pop-up overlays on the page.' },
+      { icon: '🔍', title: 'Analyze Page', desc: 'Click "Analyze Page" to auto-detect and assign a grade based on page content.' },
+      { icon: '⚡', title: 'Toggle Filter', desc: 'Turning off removes all filtering completely until you turn it back on.' },
+    ],
   },
 };
 
@@ -147,10 +160,9 @@ chrome.storage.local.get({ uiLang: 'he' }, ({ uiLang }) => {
   applyLanguage(uiLang);
 });
 
-const modal = document.getElementById("feedbackModal");
-const submitFeedbackBtn = document.getElementById("submitFeedback");
-const cancelFeedbackBtn = document.getElementById("cancelFeedback");
-const feedbackText = document.getElementById("feedbackText");
+const modal = document.getElementById("helpModal");
+const closeHelpBtn = document.getElementById("closeHelp");
+const helpListEl = document.getElementById("helpList");
 
 let currentDomain = '';
 let currentGrade = 6;
@@ -378,50 +390,24 @@ gradeSlider.addEventListener("input", (e) => {
   });
 });
 
-// Feedback modal
-feedbackBtn.addEventListener("click", () => {
+// Help modal
+helpBtn.addEventListener("click", () => {
+  const s = STRINGS[currentLang];
+  helpListEl.innerHTML = s.helpItems.map(item => `
+    <li>
+      <span class="help-icon">${item.icon}</span>
+      <div><span class="help-item-title">${item.title}</span>${item.desc}</div>
+    </li>
+  `).join('');
   modal.classList.add("show");
-  feedbackText.value = '';
-  feedbackText.focus();
 });
 
-cancelFeedbackBtn.addEventListener("click", () => {
+closeHelpBtn.addEventListener("click", () => {
   modal.classList.remove("show");
 });
 
-submitFeedbackBtn.addEventListener("click", () => {
-  const feedback = feedbackText.value.trim();
-  if (!feedback) return;
-
-  chrome.storage.local.get(['siteGrades'], (result) => {
-    const siteGrades = result.siteGrades || {};
-    
-    if (!siteGrades[currentDomain]) {
-      siteGrades[currentDomain] = {
-        autoGrade: 6,
-        userGrade: currentGrade,
-        feedback: feedback,
-        teachingExamples: currentAnalysis?.findings || null,
-        lastSaved: new Date().toISOString(),
-      };
-    } else {
-      siteGrades[currentDomain].feedback = feedback;
-      if (currentAnalysis?.findings) {
-        if (!siteGrades[currentDomain].teachingExamples) {
-          siteGrades[currentDomain].teachingExamples = [];
-        }
-        if (Array.isArray(siteGrades[currentDomain].teachingExamples)) {
-          siteGrades[currentDomain].teachingExamples.push(currentAnalysis.findings);
-        }
-      }
-      siteGrades[currentDomain].lastSaved = new Date().toISOString();
-    }
-
-    chrome.storage.local.set({ siteGrades }, () => {
-      modal.classList.remove("show");
-      alert("Feedback saved! Thank you for helping improve the grading system.");
-    });
-  });
+modal.addEventListener("click", (e) => {
+  if (e.target === modal) modal.classList.remove("show");
 });
 
 // Whitelist
@@ -551,21 +537,4 @@ popupsBlockedCheck.addEventListener('change', () => {
   });
 });
 
-// Unblur seconds slider
-chrome.storage.local.get({ unblurSeconds: 6 }, ({ unblurSeconds }) => {
-  unblurSlider.value = unblurSeconds;
-  unblurValueEl.textContent = unblurSeconds;
-});
 
-unblurSlider.addEventListener('input', () => {
-  const val = parseInt(unblurSlider.value);
-  unblurValueEl.textContent = val;
-  chrome.storage.local.set({ unblurSeconds: val }, () => {
-    // Notify all content scripts of the new value
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]?.id) {
-        chrome.tabs.sendMessage(tabs[0].id, { action: 'setUnblurSeconds', seconds: val }).catch(() => {});
-      }
-    });
-  });
-});

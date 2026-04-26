@@ -34,12 +34,22 @@
     popupsBlocked: true,
   };
 
-  // Seconds until full unblur on hover (configurable from popup)
-  let unblurSeconds = 6;
-  chrome.storage.local.get({ unblurSeconds: 6 }, (r) => { unblurSeconds = r.unblurSeconds; });
+  // Derive unblur params from grade automatically:
+  // grade 4 → 1s hover delay + 3s unblur; grade 5 → 0.5s delay + 2s; grade 6 → 0 + 2s;
+  // grade 7 → 0 + 1s; grade 8+ → instant
+  function getUnblurParams(grade) {
+    if (grade >= 8) return { delayMs: 0, steps: 0 };   // instant
+    if (grade === 7) return { delayMs: 0, steps: 1 };
+    if (grade === 6) return { delayMs: 0, steps: 2 };
+    if (grade === 5) return { delayMs: 500, steps: 2 };
+                     return { delayMs: 1000, steps: 3 }; // grade 4 (and below, though ≤3 are blocked)
+  }
 
-  // Map of el → { timer, currentBlur, targetBlur, interval }
+  // Map of el → { delay, interval, maxBlur }
   const hoverState = new Map();
+
+  // Elements currently in hover-unblurred state (toggle tracking)
+  const hoverToggled = new Set();
 
   // Global flag to stop ALL processing
   let shouldProcess = true;
@@ -161,66 +171,113 @@
     } catch (e) { /* ignore */ }
   }
 
-  // Start gradual unblur on mouseenter, restore immediately on mouseleave
+  // Toggle blur/unblur on hover. Mouse leave leaves filter as-is (no re-blur).
+  // Each hover: if element is unblurred → re-blur it; if blurred → unblur it.
   function attachHoverUnblur(el) {
     if (el._cfHoverAttached) return;
     el._cfHoverAttached = true;
 
     el.addEventListener('mouseenter', () => {
       if (!shouldProcess) return;
-      if (revealed.has(el)) return; // already fully revealed by dblclick
+      if (revealed.has(el)) return; // dblclick-revealed — leave alone
       if (currentSettings.isBlacklisted || currentSettings.grade <= 3) return;
 
       const maxBlur = getBlurPxForGrade(currentSettings.grade);
       if (!maxBlur) return; // grade 10 — no blur
 
-      // Clear any existing interval for this element
+      const { delayMs, steps } = getUnblurParams(currentSettings.grade);
+      const goingUnblur = !hoverToggled.has(el); // direction: true = unblur, false = re-blur
+
+      // Cancel any in-progress animation
       const prev = hoverState.get(el);
-      if (prev && prev.interval) clearInterval(prev.interval);
+      if (prev) {
+        if (prev.delay) clearTimeout(prev.delay);
+        if (prev.interval) clearInterval(prev.interval);
+      }
 
-      const steps = unblurSeconds; // one step per second
-      const blurStep = maxBlur / steps;
-      let currentBlur = maxBlur;
-      let fullyUnblurred = false;
-
-      const interval = setInterval(() => {
-        if (!shouldProcess || revealed.has(el)) {
-          clearInterval(interval);
-          hoverState.delete(el);
-          return;
-        }
-        currentBlur = Math.max(0, currentBlur - blurStep);
-        const brightnessVal = currentSettings.grade <= 5 ? 0.05 + (1 - 0.05) * (1 - currentBlur / maxBlur)
-                            : currentSettings.grade <= 7 ? 0.2  + (1 - 0.2)  * (1 - currentBlur / maxBlur)
-                            :                              0.4  + (1 - 0.4)  * (1 - currentBlur / maxBlur);
-        const filterStr = currentBlur > 0
-          ? `blur(${currentBlur.toFixed(1)}px) brightness(${brightnessVal.toFixed(2)})`
-          : 'none';
-        el.style.setProperty('filter', filterStr, 'important');
-
-        if (currentBlur <= 0 && !fullyUnblurred) {
-          fullyUnblurred = true;
-          clearInterval(interval);
-          hoverState.delete(el);
+      // Instant (grade 8+)
+      if (steps === 0) {
+        if (goingUnblur) {
+          el.style.setProperty('filter', 'none', 'important');
+          hoverToggled.add(el);
           logUnblurredElement(el);
+        } else {
+          el.style.setProperty('filter', getBlurForGrade(currentSettings.grade), 'important');
+          hoverToggled.delete(el);
         }
-      }, 1000);
+        hoverState.delete(el);
+        return;
+      }
 
-      hoverState.set(el, { interval, maxBlur });
+      function startInterval() {
+        const blurStep = maxBlur / steps;
+        // Start from current applied filter if mid-animation, otherwise from endpoints
+        let currentBlur = goingUnblur ? maxBlur : 0;
+        let done = false;
+
+        const interval = setInterval(() => {
+          if (!shouldProcess || revealed.has(el)) {
+            clearInterval(interval);
+            hoverState.delete(el);
+            return;
+          }
+
+          if (goingUnblur) {
+            currentBlur = Math.max(0, currentBlur - blurStep);
+          } else {
+            currentBlur = Math.min(maxBlur, currentBlur + blurStep);
+          }
+
+          const brightnessVal = currentSettings.grade <= 5 ? 0.05 + (1 - 0.05) * (1 - currentBlur / maxBlur)
+                              : currentSettings.grade <= 7 ? 0.2  + (1 - 0.2)  * (1 - currentBlur / maxBlur)
+                              :                              0.4  + (1 - 0.4)  * (1 - currentBlur / maxBlur);
+          const filterStr = currentBlur > 0
+            ? `blur(${currentBlur.toFixed(1)}px) brightness(${brightnessVal.toFixed(2)})`
+            : 'none';
+          el.style.setProperty('filter', filterStr, 'important');
+
+          const finished = goingUnblur ? currentBlur <= 0 : currentBlur >= maxBlur;
+          if (finished && !done) {
+            done = true;
+            clearInterval(interval);
+            hoverState.delete(el);
+            if (goingUnblur) {
+              hoverToggled.add(el);
+              logUnblurredElement(el);
+            } else {
+              hoverToggled.delete(el);
+            }
+          }
+        }, 1000);
+
+        const entry = hoverState.get(el) || {};
+        entry.interval = interval;
+        entry.maxBlur = maxBlur;
+        hoverState.set(el, entry);
+      }
+
+      if (goingUnblur && delayMs > 0) {
+        const delay = setTimeout(() => {
+          if (!shouldProcess || revealed.has(el)) return;
+          startInterval();
+        }, delayMs);
+        hoverState.set(el, { delay, maxBlur });
+      } else {
+        hoverState.set(el, { maxBlur });
+        startInterval();
+      }
     });
 
     el.addEventListener('mouseleave', () => {
+      // Cancel any pending delay (don't start if mouse left before delay fired)
       const state = hoverState.get(el);
-      if (state && state.interval) {
-        clearInterval(state.interval);
-        hoverState.delete(el);
+      if (state && state.delay) {
+        clearTimeout(state.delay);
+        // Remove delay entry but leave interval running if it started
+        if (!state.interval) hoverState.delete(el);
+        else delete state.delay;
       }
-      if (revealed.has(el)) return; // dblclick revealed — don't re-blur
-      // Immediately restore full blur
-      const blurVal = getBlurForGrade(currentSettings.grade);
-      if (blurVal) {
-        el.style.setProperty('filter', blurVal, 'important');
-      }
+      // In-progress interval keeps running — element stays in current filter state
     });
   }
 
@@ -790,10 +847,6 @@
       sendResponse({ success: true });
     }
 
-    if (request.action === 'setUnblurSeconds') {
-      unblurSeconds = request.seconds;
-      sendResponse({ success: true });
-    }
   });
 
   // ── Initialize on load ─────────────────────────────────────────────────────
@@ -881,10 +934,6 @@
     if ("siteGrades" in changes || "whitelist" in changes || "blacklist" in changes) {
       // Re-evaluate settings for this site
       initializeFilter();
-    }
-
-    if ("unblurSeconds" in changes) {
-      unblurSeconds = changes.unblurSeconds.newValue;
     }
   });
 
